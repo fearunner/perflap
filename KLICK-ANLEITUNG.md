@@ -1,4 +1,21 @@
-# Performance Lab 2.1: Klick-Anleitung
+# Performance Lab 3.0: Klick-Anleitung
+
+## Neu in 3.0
+
+- **Fünf Bereiche:** Heute, Plan, **Daten**, **Leistung**, Profil.
+- **Automatisch anpassen:** Krankheit, Reise, verpasste Einheiten und Warnsignale passen den Plan sofort an. Oben unter Heute erscheint die grüne Karte „Automatisch angepasst“ mit **Zurücknehmen**. Tests und Rennen verschiebt die App nie ohne deine Bestätigung. Ausschalten kannst du das unter **Profil**, **Coach**, **Automatisch anpassen**.
+- **Daten:** Unter **Daten** importierst du deine Aktivitäten.
+  - **Garmin:** connect.garmin.com, **Aktivitäten**, **Alle Aktivitäten**, scrollen, dann **Export CSV**.
+  - **Strava:** **Einstellungen**, **Mein Konto**, **Konto herunterladen**, aus der ZIP-Datei die activities.csv wählen.
+  - Die App ordnet jede Aktivität der passenden Einheit zu. Was nicht passt, wird freies Training. Doppelte Aktivitäten erkennt sie.
+  - Darunter siehst du die Woche je Sportart, die Intensitätsverteilung, deine Bestwerte und alle Aktivitäten mit Ampel (grün = wie geplant).
+- **Leistung:** Hier steht die Prognose für Linz als Spanne mit Abstand zum Ziel. Darunter folgen die Checkpoints (10-km-Tests, 38 km, HM Frankfurt, CSS, Bergtest), deine Verbesserungen seit Planstart, die Formkurve und die VO2max.
+- **Warum diese Einheit?** In jeder Einheit und in jedem Wochenkopf (Phase) steht, wozu sie dient, wie du sie dosierst und wie gut das belegt ist (A, B, C), jeweils mit Quellen.
+- **KI-Coach (optional, standardmäßig aus):** Einschalten unter **Profil**, **Coach**, **KI-Coach**. Danach hast du zwei Wege.
+  - **Ohne Kosten:** **Anfrage kopieren**, in Claude einfügen, die Antwort zurück einfügen und **Prüfen** tippen.
+  - **Direkt:** mit eigenem Anthropic-API-Schlüssel. Das kostet wenige Cent pro Anfrage.
+  - In beiden Fällen prüft die App jeden Vorschlag gegen ihre Regeln, und du bestätigst ihn. Krankheitsart, Hotel, Gewicht und Notizen gehen nie mit.
+- **Zurück ins Excel:** Unter **Profil**, **Zurück ins Excel schreiben** erzeugst du eine neue `Trainingsplan_2026-2027.xlsx` mit Status, Ist-Werten, Anpassungen, Check-ins und Tests. Damit ersetzt du die alte Datei im Ordner. Formatierung und Formeln bleiben erhalten. Beim ersten Mal fragt die App einmal nach der Excel-Datei.
 
 ## Neu in 2.1
 

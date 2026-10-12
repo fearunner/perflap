@@ -1,5 +1,5 @@
 /* Offline-Cache mit Versionierung. Netzwerk zuerst, ohne Netz aus dem Cache. Neue Version wartet, bis die App "Neu laden" anbietet. */
-const V = "perflab-2.1.0";
+const V = "perflab-3.0.0";
 const F = ["./", "index.html", "style.css", "app.js", "engine.js", "xlsx.mini.min.js", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => e.waitUntil(caches.open(V).then(c => c.addAll(F))));
 self.addEventListener("activate", e => e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== V).map(x => caches.delete(x)))).then(() => self.clients.claim())));

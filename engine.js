@@ -35,7 +35,7 @@ function parseWorkbook(XLSX, buf) {
   S.events = [15, 16, 17, 18].map(r => ({ name: get("Einstellungen", "A" + r), date: get("Einstellungen", "B" + r) })).filter(e => e.name && num(e.date));
   const seed = {};
   const plan = [], cnt = {};
-  rows("Plan").slice(4).forEach(r => {
+  rows("Plan").slice(4).forEach((r, ri) => {
     if (!num(r[16]) || !num(r[0])) return;
     const sport = String(r[4] || ""), date = r[16];
     const k = date + "-" + sport.slice(0, 3); cnt[k] = (cnt[k] || 0) + 1;
@@ -44,16 +44,16 @@ function parseWorkbook(XLSX, buf) {
       km: num(r[8]) ? r[8] : 0, min: num(r[9]) ? r[9] : 0, code: String(r[15] || ""),
       time: ((String(r[2] || "").match(/\d\d:\d\d–\d\d:\d\d/) || [""])[0]),
       wake: ((String(r[21] || "").match(/Wecker (\d+:\d\d)/) || [, ""])[1]), hint: String(r[21] || "").replace(/Wecker \d+:\d\d\n?/, "").trim(),
-      typ, test: typ ? (RACE_TYPES.includes(typ) ? "race" : "test") : "", tkey: typ ? date + "-" + typ : "", trip: /✈/.test(String(r[2] || "")) || /^Reise/.test(String(r[5] || "")) };
+      typ, row: ri + 5, test: typ ? (RACE_TYPES.includes(typ) ? "race" : "test") : "", tkey: typ ? date + "-" + typ : "", trip: /✈/.test(String(r[2] || "")) || /^Reise/.test(String(r[5] || "")) };
     plan.push(s);
     const st = String(r[10] || "").trim();
-    if (["✓", "½", "✗"].includes(st) || num(r[11]) || num(r[12])) seed["log:" + s.id] = { st: ["✓", "½", "✗"].includes(st) ? st : "", ikm: num(r[11]) ? r[11] : null, imin: num(r[12]) ? r[12] : null };
+    if (["✓", "½", "✗"].includes(st) || num(r[11]) || num(r[12])) seed["log:" + s.id] = Object.assign({ st: ["✓", "½", "✗"].includes(st) ? st : "", ikm: num(r[11]) ? r[11] : null, imin: num(r[12]) ? r[12] : null }, st === "✗" && /^\[App\] krank/.test(String(r[21] || "")) ? { why: "krank" } : {});
   });
   if (!plan.length) throw new Error("Im Blatt Plan wurden keine Einheiten gefunden.");
   const tests = [];
-  rows("Tests").slice(4).forEach(r => {
+  rows("Tests").slice(4).forEach((r, ri) => {
     if (!r[2] || !num(r[1])) return;
-    const t = { key: r[1] + "-" + r[3], w: r[0], date: r[1], name: String(r[2]), typ: String(r[3] || ""), dist: num(r[4]) ? r[4] : null, how: String(r[8] || "") };
+    const t = { key: r[1] + "-" + r[3], w: r[0], date: r[1], name: String(r[2]), typ: String(r[3] || ""), dist: num(r[4]) ? r[4] : null, how: String(r[8] || ""), row: ri + 5 };
     if (tests.some(x => x.key === t.key)) t.key += "b";
     tests.push(t);
     if (num(r[5]) || num(r[6])) seed["test:" + t.key] = { time: num(r[5]) ? r[5] : null, hf: num(r[6]) ? r[6] : null };
@@ -61,7 +61,7 @@ function parseWorkbook(XLSX, buf) {
   const weeks = {};
   const wr = rows("Wochen");
   const painLabel = String((wr[3] && wr[3][4]) || "Schmerz 0–10").replace(/^✎\s*/, "");
-  wr.slice(4, 60).forEach(r => { if (!num(r[0])) return; weeks[r[0]] = { phase: String(r[2] || "").replace(/^\d+\s*/, "") };
+  wr.slice(4, 60).forEach((r, ri) => { if (!num(r[0])) return; weeks[r[0]] = { phase: String(r[2] || "").replace(/^\d+\s*/, ""), row: ri + 5 };
     if (num(r[3]) || num(r[4]) || num(r[5])) seed["chk:" + r[0]] = { puls: num(r[3]) ? r[3] : null, pain: num(r[4]) ? r[4] : null, feel: num(r[5]) ? r[5] : null }; });
   const shoes = []; rows("Schuhe").slice(4, 12).forEach(r => { if (r[0]) shoes.push({ name: String(r[0]), std: r[2] || "", start: num(r[3]) ? r[3] : 0, limit: num(r[6]) ? r[6] : 0 }); });
   const extras = {}; let cur = null;
@@ -98,7 +98,7 @@ function derive(B, st) {
   const eq = t => { const x = res(t.key).time; if (!num(x)) return null; return t.typ === "10K" ? x * Math.pow(HMK / 10, 1.06) : t.typ === "HM" ? x : t.typ === "M" ? x / RIEGEL : null; };
   const ht = last(t => eq(t) != null);
   R.hasTest = !!ht; R.refTest = ht ? ht.name : null;
-  R.refHM = ht ? eq(ht) : S.baseRef;
+  R.refHM = ht ? eq(ht) : num(S.baseRef) ? S.baseRef : S.tgtHM;
   const cssD = done.filter(t => t.typ === "CSS400" && num(res(t.key).time)).map(t => { const p = B.tests.find(x => x.typ === "CSS200" && x.date === t.date); const b = p && res(p.key).time; return num(b) ? (res(t.key).time - b) / 2 : null; }).filter(num);
   R.css = cssD.length ? cssD[cssD.length - 1] : null;
   R.prog = R.refHM * RIEGEL; R.needHM = S.tgtM / RIEGEL;
@@ -217,8 +217,10 @@ function moveOps(s, slot, note, E) {
   c.note = note || ("Verschoben von " + wdD(s.date) + ".");
   const ops = [{ type: "add", s: c }];
   if (slot.rep) ops.push({ type: "drop", id: slot.rep.id, note: "Ersetzt durch " + s.name + "." });
+  if (s.test) ops.forEach(o => o.grp = "test");
   return ops;
 }
+function isTestOp(o, E) { if (o.grp === "test") return true; if (o.type === "add") return !!o.s.test; const s = E.find(x => x.id === o.id); return !!(s && s.test); }
 function describeOps(ops, E) {
   const byId = id => E.find(x => x.id === id);
   return ops.map(o => {
@@ -231,6 +233,67 @@ function describeOps(ops, E) {
     return "";
   }).filter(Boolean);
 }
+
+/* ---------- Wissenschaft je Einheitentyp und Phase (v3.0) ----------
+   ev: "A" = Konsens/Metaanalyse, "B" = Einzelstudien/Modell, "C" = Trainerpraxis/Erfahrung. src: Schlüssel in SRC. */
+const SRC = {
+  seiler: "Seiler S. (2010), What is best practice for training intensity and duration distribution in endurance athletes? Int J Sports Physiol Perform 5(3):276–91",
+  oliveira: "Silva Oliveira P. et al. (2024), Polarized vs. other intensity distributions: Metaanalyse, Sports Med 54:2071–95, PMID 38717713",
+  muniz: "Muniz-Pumares D. et al. (2025), Marathon training in 119.452 Läufern (Strava), Sports Med 55(4):1023–35, PMID 39616560",
+  daniels: "Daniels J. (2014), Daniels' Running Formula, 3. Aufl., Human Kinetics",
+  midgley: "Midgley A.W. et al. (2007), Training to enhance VO2max and running performance, Sports Med 37(10):857–80",
+  buchheit: "Buchheit M., Laursen P.B. (2013), High-intensity interval training, Sports Med 43(5):313–38",
+  faude: "Faude O. et al. (2009), Lactate threshold concepts, Sports Med 39(6):469–90",
+  stellingwerff: "Stellingwerff T. (2012), Case study: marathon training and nutrition of elite runners, Int J Sport Nutr Exerc Metab 22(5):392–400",
+  bosquet: "Bosquet L. et al. (2007), Effects of tapering on performance: Metaanalyse, Med Sci Sports Exerc 39(8):1358–65",
+  mujika: "Mujika I., Padilla S. (2000), Detraining, Sports Med 30(2):79–87",
+  llanos: "Llanos-Lagos C. et al. (2024), Krafttraining und Laufleistung: Metaanalyse, Sports Med, PMID 38627351",
+  lauersen: "Lauersen J.B. et al. (2014), Krafttraining zur Verletzungsprävention: Metaanalyse, Br J Sports Med 48(11):871–7",
+  frandsen: "Frandsen J.S.B. et al. (2025), Single-session spikes, Br J Sports Med 59(17):1203–10, PMID 40623829",
+  millet: "Millet G.P., Vleck V.E. (2000), Physiological and biomechanical adaptations to the cycle to run transition, Br J Sports Med 34(5):384–90",
+  wakayoshi: "Wakayoshi K. et al. (1992), Critical swimming speed, Int J Sports Med 13(5):367–71",
+  toussaint: "Toussaint H.M., Beek P.J. (1992), Biomechanics of competitive front crawl swimming, Sports Med 13(1):8–24",
+  friel: "Friel J. (2016), The Triathlete's Training Bible, 4. Aufl., VeloPress",
+  issurin: "Issurin V.B. (2010), New horizons for the methodology of block periodization, Sports Med 40(3):189–206",
+  rpe: "Foster C. et al. (2001), A new approach to monitoring exercise training, J Strength Cond Res 15(1):109–15",
+  behm: "Behm D.G. et al. (2016), Acute effects of muscle stretching, Appl Physiol Nutr Metab 41(1):1–11",
+  jeuk: "Jeukendrup A. (2017), Training the gut for athletes, Sports Med 47 Suppl 1:101–10"
+};
+const WHY = {
+  E: { t: "Lockerer Dauerlauf", zweck: "Aerobe Grundlage: Mitochondrien, Kapillaren, Fettstoffwechsel, Laufökonomie. Bringt Umfang bei wenig Ermüdung.", dos: "HF unter dem Deckel, Sprechen in ganzen Sätzen möglich. Lieber zu langsam als zu schnell.", ev: "A", src: ["seiler", "muniz", "oliveira"], hint: "Der Großteil des Umfangs ist locker. Studien zeigen: Entscheidend ist der Gesamtumfang, keine starre 80/20-Quote." },
+  LR: { t: "Long Run", zweck: "Ermüdungsresistenz und Glykogenspeicher für die letzten Marathon-Kilometer, Training der Sehnen und Knochen auf lange Belastung.", dos: "Locker, HF-Deckel. Steigerung höchstens etwa +10 % zum längsten Lauf der letzten 30 Tage. Ab 90 Minuten mit Verpflegung.", ev: "B", src: ["daniels", "frandsen", "stellingwerff"], hint: "Die Länge zählt mehr als das Tempo." },
+  LRM: { t: "Long Run mit Marathontempo", zweck: "Marathontempo unter Vorermüdung halten, Verpflegung und Pacing unter Rennbedingungen üben.", dos: "Locker einlaufen, MP-Blöcke im zweiten Teil, HF-Drift beobachten. Gels wie im Rennen.", ev: "C", src: ["daniels", "stellingwerff", "jeuk"], hint: "Spezifisch für Linz. Trainerpraxis, die Evidenz stammt aus Fallstudien mit Eliteläufern." },
+  MP: { t: "Marathontempo", zweck: "Ökonomie und Gefühl für die Zielpace 4:29 /km, Kohlenhydratstoffwechsel bei Renntempo.", dos: "± 2 s/km um die Zielpace, HF im MP-Band.", ev: "C", src: ["daniels"], hint: "Die Pace folgt deinem Teststand, nicht dem Wunsch." },
+  T: { t: "Schwelle", zweck: "Hebt die Laktatschwelle, also das Tempo, das du lange halten kannst. Wichtigster Prädiktor für Marathonleistung neben VO2max.", dos: "Etwa 20–40 Minuten in Blöcken, angenehm hart, RPE 7.", ev: "A", src: ["faude", "daniels", "seiler"], hint: "Kontrolliert, nicht maximal." },
+  I: { t: "Intervalle (VO2max)", zweck: "Maximale Sauerstoffaufnahme und Laufökonomie bei hohem Tempo.", dos: "3–5 Minuten Belastung, gleich lange Trabpause, gesamt 15–20 Minuten hart. Die letzte Wiederholung muss so schnell sein wie die erste.", ev: "A", src: ["midgley", "buchheit"], hint: "Wenig davon reicht, 1× pro Woche in Aufbauphasen." },
+  HMZ: { t: "HM-Zielpace", zweck: "Spezifisch für Frankfurt: Renntempo kennen, Pacing üben.", dos: "Blöcke in Zielpace 4:16 /km.", ev: "C", src: ["daniels"], hint: "" },
+  MD: { t: "Laufpace Mitteldistanz", zweck: "Tempo für den Allgäu-Laufsplit, auch im Koppellauf nach dem Rad.", dos: "Kontrolliert, HF im MD-Band.", ev: "C", src: ["friel"], hint: "" },
+  AC: { t: "Aerob-Check", zweck: "Misst den Fortschritt: Pace bei fester HF 145. Wird sie schneller, wächst die aerobe Grundlage.", dos: "Gleiche Strecke, gleiche HF, gleiche Bedingungen.", ev: "B", src: ["seiler"], hint: "Vergleichbarkeit vor allem." },
+  TEST: { t: "Test", zweck: "Kalibriert Paces und Zonen. Ohne Test trainierst du nach Wunsch statt nach Form.", dos: "Ausgeruht, gleichmäßig, voll.", ev: "B", src: ["daniels", "faude"], hint: "Ein Test ist ein Datenpunkt, kein Urteil." },
+  M: { t: "Marathon", zweck: "Wettkampf Linz.", dos: "Rennplan, Verpflegungsplan.", ev: "B", src: ["stellingwerff"], hint: "" },
+  R2: { t: "Rad locker", zweck: "Aerobe Grundlage ohne Laufbelastung für Sehnen und Knochen.", dos: "RPE 3–4, 85–95 U/min.", ev: "A", src: ["seiler", "friel"], hint: "" },
+  R3: { t: "Rad Tempo", zweck: "Renntempo für die Mitteldistanz, Muskelausdauer am Berg.", dos: "RPE 6, an Anstiegen nicht über Rad-Schwelle.", ev: "C", src: ["friel"], hint: "" },
+  R4: { t: "Rad Schwelle", zweck: "Hebt die Schwelle auf dem Rad, Tempo für die Olympische Distanz.", dos: "RPE 7–8, Blöcke 8–20 Minuten.", ev: "A", src: ["faude", "friel"], hint: "" },
+  SW: { t: "Schwimmen", zweck: "Technik vor Kondition: Wasserlage und Vortrieb entscheiden mehr als Kraft.", dos: "Drills, kurze Serien, CSS als Tempomaß.", ev: "B", src: ["toussaint", "wakayoshi"], hint: "Bei dir als Umsteiger ist Technik der größte Hebel." },
+  OW: { t: "Freiwasser", zweck: "Orientieren, Neo, Rennsituation.", dos: "Nie allein, Boje, Begleitung.", ev: "C", src: ["friel"], hint: "" },
+  TRI: { t: "Triathlon", zweck: "Wettkampf.", dos: "Rennplan.", ev: "C", src: ["friel"], hint: "" },
+  GYM: { t: "Krafttraining", zweck: "Bessere Laufökonomie und weniger Verletzungen. Kombination aus schweren Lasten und Sprüngen wirkt am stärksten.", dos: "1–2× pro Woche, schwer und kurz, nicht vor Schlüsseleinheiten.", ev: "A", src: ["llanos", "lauersen"], hint: "Fällt auch im Peak nicht weg." },
+  MOB: { t: "Mobility", zweck: "Beweglichkeit und Routine. Die Verletzungsprävention durch Dehnen ist schwach belegt.", dos: "Locker, schmerzfrei.", ev: "C", src: ["behm"], hint: "Ehrlich: Wirkung vor allem auf das Wohlbefinden." },
+  AKT: { t: "Aktivierung vor dem Rennen", zweck: "Kurze Reize im Renntempo halten die Muskulatur wach, ohne zu ermüden.", dos: "Kurz, ein paar Steigerungen, locker.", ev: "B", src: ["bosquet"], hint: "Im Taper bleibt die Intensität, nur der Umfang sinkt." },
+  KOPPEL: { t: "Koppellauf", zweck: "Gewöhnt an das Laufen nach dem Rad: Schrittlänge, Koordination und Gefühl ändern sich in den ersten Minuten.", dos: "Steigend von 10 auf 60 Minuten, Wechsel zügig.", ev: "B", src: ["millet", "friel"], hint: "" }
+};
+const PHASE_WHY = [
+  { re: /Wiedereinstieg/i, zweck: "Gesund werden, Routine aufbauen, Belastung langsam steigern.", ev: "B", src: ["mujika", "frandsen"] },
+  { re: /Basis/i, zweck: "Umfang und aerobe Grundlage bei niedriger Intensität (HF-Deckel). Sehnen und Knochen gewöhnen sich an mehr Kilometer.", ev: "A", src: ["seiler", "muniz"] },
+  { re: /Grundlage & Tempo/i, zweck: "Grundlage halten, erste Schwellen- und VO2max-Reize, Long Run wächst.", ev: "A", src: ["midgley", "faude"] },
+  { re: /Marathonspezifisch/i, zweck: "Spezifische Reize: lange Läufe mit Marathontempo, Verpflegung trainieren, Peak 38 km.", ev: "C", src: ["daniels", "stellingwerff", "issurin"] },
+  { re: /Taper/i, zweck: "Umfang um 40–60 % senken, Intensität halten: Ermüdung baut sich ab, die Fitness bleibt.", ev: "A", src: ["bosquet"] },
+  { re: /Regeneration|Übergang/i, zweck: "Körperlich und mental erholen. Kurze Pausen kosten kaum Fitness.", ev: "B", src: ["mujika"] },
+  { re: /Triathlon-Basis|Olympische|Allgäu/i, zweck: "Drei Sportarten koordinieren, Schwimmtechnik zuerst, Rad als Umfangsträger, Koppelläufe steigern, Berge für Allgäu.", ev: "C", src: ["friel", "millet"] }
+];
+function whyOf(s) { if (!s) return null; if (/Koppel/i.test(s.name || "")) return WHY.KOPPEL; if (/Aktivierung/i.test(s.name || "")) return WHY.AKT; return WHY[s.code] || (s.sport === "Kraft" ? WHY.GYM : s.sport === "Mobility" ? WHY.MOB : null); }
+function phaseWhy(ph) { return PHASE_WHY.find(p => p.re.test(ph || "")) || null; }
+const EV_LAB = { A: "Gut belegt (Konsens oder Metaanalysen)", B: "Belegt durch Einzelstudien oder Modelle", C: "Trainerpraxis, wenig direkte Studien" };
 
 /* ---------- Krankheit und Reise: Kataloge (Kategorien statt Diagnosen) ---------- */
 const SICK_CAT = {
@@ -317,7 +380,17 @@ function proposals(B, st, t) {
     /* Konflikte: Einheiten, die ein wichtigerer Vorschlag schon ändert, bleiben bei diesem. Der Rest des Vorschlags gilt weiter. */
     p.ops = (p.ops || []).filter(o => { const k = o.type + ":" + (o.type === "add" ? o.s.id : o.id); if (seen.has(k)) return false; seen.add(k); return !touched.has(baseId(o)); });
     if (had && !p.ops.length) return;
-    p.ops.forEach(o => { if (o.type !== "add") touched.add(o.id); }); p.lines = describeOps(p.ops, E); out.push(p); };
+    p.ops.forEach(o => { if (o.type !== "add") touched.add(o.id); });
+    /* v3.0: Testverschiebungen getrennt, damit die Automatik sie nicht ohne Bestätigung übernimmt. */
+    const tOps = p.ops.filter(o => isTestOp(o, E)), rest = p.ops.filter(o => !isTestOp(o, E));
+    if (tOps.length && rest.length) {
+      p.ops = rest; p.lines = describeOps(rest, E); out.push(p);
+      const tp = { key: p.key + ":test", sev: "info", title: "Test verschieben (bitte bestätigen)", why: "Tests kalibrieren deine Paces, deshalb verschiebt die App sie nicht automatisch. Anlass: " + p.title + ".", ops: tOps, needsOk: true };
+      if (!resolved(st, tp.key)) { tp.lines = describeOps(tOps, E); out.push(tp); }
+      return;
+    }
+    if (tOps.length) p.needsOk = true;
+    p.lines = describeOps(p.ops, E); out.push(p); };
   const open = s => isTrain(s) && !statusOf(st, s, t) && s.test !== "race";
   const rw = raceWindows(E), inTaper = d => rw.some(w => d >= w.from && d <= w.to);
   const ex = B.extras["Hotel-Varianten"] || [];
@@ -402,7 +475,7 @@ function proposals(B, st, t) {
         if (s.test) { ops.push({ type: "drop", id: s.id, note: "Test erst nach der Erkältung." }); const sl = findSlot(ctx, s, t + 5, t + 14, { needRep: true, avoid: d => usedH.includes(d) }); if (sl) { usedH.push(sl.d); ops.push(...moveOps(s, sl, "Test nach Erkältung verschoben.", E)); } return; }
         ops.push({ type: "edit", id: s.id, patch: lockerPatch(s, Math.min(.7, 45 / (s.min || 45)), "Erkältung: nur locker, höchstens 45 Minuten."), note: "Erkältung." }); });
       if (cat === "verletzung") E.filter(s => s.date >= t && s.date < t + 7 && open(s) && injAffects(sk.region, s)).forEach(s => ops.push(injAlt(sk.region, s)));
-      if (ops.length) add({ key: "sickact:" + sk.from + ":" + t, sev: "warn", title: cat === "hals" ? "Erkältung: nächste 3 Tage nur locker" : "Verletzung: betroffene Einheiten ersetzen",
+      if (ops.length) add({ key: "sickact:" + sk.from + ":" + (sk.cat || "") + (sk.region || ""), sev: "warn", title: cat === "hals" ? "Erkältung: nächste 3 Tage nur locker" : "Verletzung: betroffene Einheiten ersetzen",
         why: cat === "hals" ? "Symptome nur oberhalb des Halses und kein Fieber: lockeres Training ist meist möglich, harte Reize nicht. Wandern die Symptome nach unten (Husten, Gliederschmerzen) oder kommt Fieber dazu, Kategorie auf Infekt ändern und pausieren."
           : "Belastung, die schmerzt, verlängert die Pause. Alternativen nur, wenn sie schmerzfrei gehen (Schmerz höchstens 2 von 10, am nächsten Morgen nicht schlimmer). Hält der Schmerz länger als ein paar Tage an, physiotherapeutisch oder ärztlich abklären.", ops });
     } else {
@@ -483,7 +556,7 @@ function proposals(B, st, t) {
         const cap = best > 0 ? Math.max(12, Math.round(best * 1.1)) : Math.max(12, Math.round(nx.km * .6));
         if (nx.km > cap) {
           const min = r5(nx.min * cap / nx.km);
-          add({ key: "lrcap:" + nx.id + ":" + cap, sev: "info", title: "Long Run: Sprung " + (best ? "+" + Math.round((nx.km / best - 1) * 100) + " %" : "ohne Vorlauf") + ", Vorschlag " + cap + " km",
+          add({ key: "lrcap:" + nx.id + ":" + cap, sev: "info", needsOk: true, title: "Long Run: Sprung " + (best ? "+" + Math.round((nx.km / best - 1) * 100) + " %" : "ohne Vorlauf") + ", Vorschlag " + cap + " km",
             why: (best > 0 ? "Dein längster erledigter Lauf der letzten 30 Tage: " + r1(best) + " km. " : "In den letzten 30 Tagen wurde kein Lauf erledigt. ") + "Geplant sind " + nx.km + " km. In einer Kohorte mit 5.200 Läufern stieg das Überlastungsrisiko, wenn ein einzelner Lauf mehr als 10 % über dem längsten der letzten 30 Tage lag (Frandsen et al. 2025, Beobachtungsstudie). Du entscheidest: übernehmen oder Plan lassen.",
             ops: [{ type: "edit", id: nx.id, patch: { km: cap, min, name: "Long Run " + cap + " km (statt " + nx.km + ")", time: timeRange(tStart(nx.time), min) }, note: "Höchstens +10 % zum längsten Lauf der letzten 30 Tage." }] });
         }
@@ -736,6 +809,372 @@ function racePlan(s, kg, o) {
   return { temp, tempLab: TEMP[temp].lab, gph, gel, gels, khTotal, rest, dur: Math.round(dur), pace, km, pre, steps, ml, na: [Math.round(ml[0] * .46 / 10) * 10, Math.round(ml[1] * .69 / 10) * 10], tri, race };
 }
 
+/* ---------- v3.0 Import: Garmin Connect Activities.csv (DE/EN) und Strava activities.csv ---------- */
+function parseCSV(text) {
+  text = String(text || "").replace(/^﻿/, "");
+  const first = text.split(/\r?\n/, 1)[0] || "", sep = (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ";" : ",";
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; continue; }
+    if (ch === '"') q = true; else if (ch === sep) { row.push(f); f = ""; } else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(f); rows.push(row); row = []; f = ""; } else f += ch;
+  }
+  if (f !== "" || row.length) { row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(c => String(c).trim() !== ""));
+}
+const normH = h => String(h || "").toLowerCase().replace(/ø|durchschnittl(iche|\.)?|avg\.?|average/g, "avg").replace(/[^a-z0-9äöüß]+/g, " ").trim();
+const H_ALIAS = {
+  date: ["activity date", "date", "datum", "startzeit", "start time"],
+  type: ["activity type", "aktivitätstyp", "aktivitätsart", "sportart", "type"],
+  title: ["activity name", "title", "titel", "name"],
+  dist: ["distance", "distanz", "strecke"],
+  move: ["moving time", "bewegungszeit"],
+  time: ["time", "zeit", "elapsed time", "verstrichene zeit", "dauer", "gesamtzeit"],
+  hf: ["avg hr", "avg herzfrequenz", "avg heart rate", "avg hf", "herzfrequenz avg"],
+  hfmax: ["max hr", "maximale herzfrequenz", "max heart rate", "max hf", "max herzfrequenz"],
+  hm: ["total ascent", "anstieg gesamt", "elevation gain", "positiver höhenunterschied", "aufstieg gesamt", "höhengewinn"],
+  id: ["activity id", "aktivitäts id"]
+};
+function colIdx(hdr, key, last) {
+  const N = hdr.map(normH), A = H_ALIAS[key], hit = [];
+  N.forEach((h, i) => { if (A.includes(h)) hit.push(i); });
+  if (!hit.length) N.forEach((h, i) => { if (A.some(a => a.length > 4 && h.startsWith(a))) hit.push(i); });
+  return hit.length ? (last ? hit[hit.length - 1] : hit[0]) : -1;
+}
+function parseNum(v) {
+  let s = String(v ?? "").trim(); if (!s || s === "--" || s === "-") return null;
+  s = s.replace(/\s|km|m$|bpm/gi, "");
+  if (/^\d{1,3}([.,]\d{3})+$/.test(s)) return Number(s.replace(/[.,]/g, ""));
+  if (s.includes(",") && s.includes(".")) s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  else s = s.replace(",", ".");
+  const n = Number(s); return isFinite(n) ? n : null;
+}
+function parseDurMin(v, secs) {
+  const s = String(v ?? "").trim(); if (!s || s === "--") return null;
+  if (/^\d+([.,]\d+)?$/.test(s)) { const n = Number(s.replace(",", ".")); return secs ? n / 60 : n; }
+  const p = s.split(":").map(x => Number(x.replace(",", "."))); if (p.some(x => !isFinite(x))) return null;
+  return p.length === 3 ? p[0] * 60 + p[1] + p[2] / 60 : p.length === 2 ? p[0] + p[1] / 60 : null;
+}
+const MON_EN = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11, mär: 2, mai: 4, okt: 9, dez: 11 };
+/* Datum zu {serial, min}. Strava-Exporte sind UTC: in lokale Zeit umrechnen. */
+function parseWhen(v, utc) {
+  const s = String(v || "").trim(); let y, mo, d, h = 0, mi = 0, se = 0, m;
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/))) { y = +m[1]; mo = +m[2] - 1; d = +m[3]; h = +(m[4] || 0); mi = +(m[5] || 0); se = +(m[6] || 0); }
+  else if ((m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4}),?\s*(?:(\d{1,2}):(\d{2})(?::(\d{2}))?)?/))) { y = +m[3] < 100 ? 2000 + +m[3] : +m[3]; mo = +m[2] - 1; d = +m[1]; h = +(m[4] || 0); mi = +(m[5] || 0); se = +(m[6] || 0); }
+  else if ((m = s.match(/^([A-Za-zä]{3})[a-zä]*\.? (\d{1,2}), (\d{4}),? (\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i))) { mo = MON_EN[m[1].toLowerCase()]; d = +m[2]; y = +m[3]; h = +m[4] % 12 + (/pm/i.test(m[7] || "") ? 12 : 0); if (!m[7]) h = +m[4]; mi = +m[5]; se = +(m[6] || 0); if (mo == null) return null; }
+  else return null;
+  const dt = utc ? new Date(Date.UTC(y, mo, d, h, mi, se)) : new Date(y, mo, d, h, mi, se);
+  if (isNaN(dt)) return null;
+  return { serial: serialOf(dt), min: dt.getHours() * 60 + dt.getMinutes() };
+}
+function sportOf(type, title) {
+  const one = x => { const v = String(x || "").toLowerCase();
+    if (/schwimm|swim|\bpool|freiwasser|open water/.test(v)) return "Schwimmen";
+    if (/(^|[^a-zäöü])(lauf|laufen|run|running|jog|jogging|trail|treadmill|laufband)/.test(v) || /(lauf|läufe?)(\b|$)/.test(v)) return "Lauf";
+    if (/\b(rad|radfahren|radsport|cycling|cycle|bike|biking|ride|ebike|spinning|mtb|gravel|rennrad|ergometer|indoor cycling|virtual ride)\b/.test(v)) return "Rad";
+    if (/kraft|strength|weight|\bgym\b|hiit|workout|crossfit/.test(v)) return "Kraft";
+    if (/yoga|mobil|stretch|pilates|dehn/.test(v)) return "Mobility";
+    return null; };
+  return one(type) || one(title) || "Sonstiges";
+}
+function parseActivities(text) {
+  const R = parseCSV(text); if (R.length < 2) throw new Error("Die Datei enthält keine Aktivitäten.");
+  const hdr = R[0], strava = colIdx(hdr, "id") >= 0 && hdr.some(h => /activity date/i.test(h));
+  const ci = { date: colIdx(hdr, "date"), type: colIdx(hdr, "type"), title: colIdx(hdr, "title"), dist: colIdx(hdr, "dist", strava), move: colIdx(hdr, "move"), time: colIdx(hdr, "time"), hf: colIdx(hdr, "hf"), hfmax: colIdx(hdr, "hfmax"), hm: colIdx(hdr, "hm"), id: colIdx(hdr, "id") };
+  if (ci.date < 0 || (ci.time < 0 && ci.move < 0)) throw new Error("Spalten nicht erkannt. Gefunden: " + hdr.slice(0, 8).join(", ") + ". Bitte die Activities.csv aus Garmin Connect oder die activities.csv aus dem Strava-Export wählen.");
+  const distLast = strava && hdr.filter(h => normH(h) === "distance").length >= 2;
+  const out = [], bad = [];
+  R.slice(1).forEach((r, i) => {
+    const w = parseWhen(r[ci.date], strava); if (!w) { bad.push(i + 2); return; }
+    const sport = sportOf(r[ci.type], r[ci.title]);
+    let dur = ci.move >= 0 ? parseDurMin(r[ci.move], strava) : null; if (!num(dur) || dur <= 0) dur = ci.time >= 0 ? parseDurMin(r[ci.time], strava) : null;
+    if (!num(dur) || dur <= 0) { bad.push(i + 2); return; }
+    let dist = ci.dist >= 0 ? parseNum(r[ci.dist]) : null;
+    if (num(dist)) { if (distLast) dist = dist / 1000; else if (sport === "Schwimmen" && dist > 20) dist = dist / 1000; else if (dist > 400) dist = dist / 1000; }
+    const hf = ci.hf >= 0 ? parseNum(r[ci.hf]) : null, hfmax = ci.hfmax >= 0 ? parseNum(r[ci.hfmax]) : null, hm = ci.hm >= 0 ? parseNum(r[ci.hm]) : null;
+    const src = strava ? "strava" : "garmin";
+    out.push({ aid: src + ":" + (ci.id >= 0 && r[ci.id] ? r[ci.id] : w.serial + "-" + w.min + "-" + Math.round(dur)), src, date: w.serial, start: w.min, sport, type: String(r[ci.type] || ""), name: String(ci.title >= 0 ? r[ci.title] || "" : ""),
+      dur: Math.round(dur * 10) / 10, dist: num(dist) && dist > 0 ? Math.round(dist * 100) / 100 : null, hf: num(hf) && hf > 30 ? Math.round(hf) : null, hfmax: num(hfmax) && hfmax > 30 ? Math.round(hfmax) : null, hm: num(hm) ? Math.round(hm) : null });
+  });
+  return { src: strava ? "strava" : "garmin", acts: out, bad };
+}
+/* Aktivitäten Planeinheiten zuordnen: gleicher Tag, gleiche Sportart, passendste Dauer. Rest wird freies Training. Bereits importierte (aid) werden übersprungen. */
+function matchActivities(B, st, acts, t) {
+  const E = effective(B, st), known = new Set(), prior = [];
+  Object.keys(st).forEach(k => { const v = st[k] && st[k].v; if (v && v.aid && (k.startsWith("log:") || k.startsWith("free:")) && !v.del) { known.add(v.aid);
+    const s0 = k.startsWith("log:") ? E.find(x => "log:" + x.id === k) : null; prior.push({ src: v.src, date: v.date ?? (s0 && s0.date), sport: v.sport || (s0 && s0.sport), start: v.start, dur: v.dur }); } });
+  const dupe = a => prior.some(p => p.src !== a.src && p.date === a.date && p.sport === a.sport && num(p.dur) && Math.abs(p.dur - a.dur) <= a.dur * .1 && (!num(p.start) || !num(a.start) || Math.abs(p.start - a.start) <= 5));
+  const taken = new Set(), res = { logs: [], free: [], skip: 0 };
+  acts.slice().sort((a, b) => a.date - b.date || a.start - b.start).forEach(a => {
+    if (known.has(a.aid) || dupe(a)) { res.skip++; return; }
+    prior.push({ src: a.src, date: a.date, sport: a.sport, start: a.start, dur: a.dur });
+    const sp = a.sport, sportOk = s => s.sport === sp || (s.sport === "Triathlon" && ["Lauf", "Rad", "Schwimmen"].includes(sp));
+    const cand = E.filter(s => s.date === a.date && isTrain(s) && !taken.has(s.id) && sportOk(s));
+    const free = cand.filter(s => { const l = val(st, "log:" + s.id); return !(l && l.aid); });
+    const best = free.sort((x, y) => Math.abs((x.min || 0) - a.dur) - Math.abs((y.min || 0) - a.dur))[0];
+    if (best && (!best.min || (a.dur >= best.min * .3 && a.dur <= best.min * 2.5))) {
+      taken.add(best.id); const old = val(st, "log:" + best.id) || {};
+      const stt = old.st === "✗" || !old.st ? (best.min && a.dur < best.min * .6 ? "½" : "✓") : old.st;
+      res.logs.push({ id: best.id, log: Object.assign({}, old, { st: stt, dur: a.dur, dist: a.dist ?? old.dist ?? null, hf: a.hf ?? old.hf ?? null, hfmax: a.hfmax ?? old.hfmax ?? null, hm: a.hm ?? old.hm ?? null, aid: a.aid, src: a.src, start: a.start, why: undefined }), a, s: best });
+    } else res.free.push({ date: a.date, sport: sp, dur: a.dur, dist: a.dist, hf: a.hf, hm: a.hm, name: a.name || a.type, aid: a.aid, src: a.src, start: a.start });
+  });
+  return res;
+}
+/* Plantreue wie TrainingPeaks: grün 80–120 %, gelb 50–79/121–150 %, orange < 50/> 150 %, rot verpasst, grau ungeplant. */
+function compliance(soll, ist, st) {
+  if (st === "✗") return { cls: "bad", pct: 0, lab: "verpasst" };
+  if (st === "krank") return { cls: "mute", pct: null, lab: "krank" };
+  if (!soll) return { cls: "free", pct: null, lab: "ungeplant" };
+  if (!num(ist) || ist <= 0) return { cls: "none", pct: null, lab: "offen" };
+  const p = ist / soll;
+  return { cls: p >= .8 && p <= 1.2 ? "ok" : (p >= .5 && p < .8) || (p > 1.2 && p <= 1.5) ? "warn" : "orange", pct: p, lab: Math.round(p * 100) + " %" };
+}
+/* Liste der Einheiten mit Ist-Daten (geplant + frei), neueste zuerst. */
+function activityList(B, st, t, E, days) {
+  E = E || effective(B, st); const from = t - (days || 28), out = [];
+  E.filter(s => s.date >= from && s.date <= t && isTrain(s)).forEach(s => {
+    const x = statusOf(st, s, t); if (!x && s.date === t) return;
+    const l = val(st, "log:" + s.id) || {}, a = actual(st, s, t), c = compliance(s.min, a.min, x || (s.date < t ? "" : ""));
+    out.push({ id: s.id, date: s.date, sport: s.sport, name: s.name, soll: s.min, sollKm: s.km, dur: a.min, dist: a.km, hf: l.hf, rpe: l.rpe, st: x, src: l.src || (x ? "manuell" : ""), comp: x ? c : { cls: s.date < t ? "need" : "none", lab: s.date < t ? "nachtragen" : "" }, code: s.code });
+  });
+  freeList(st).filter(f => f.date >= from && f.date <= t).forEach(f => out.push({ id: "free:" + f.id, date: f.date, sport: f.sport, name: f.name || f.sport, soll: 0, dur: f.dur, dist: f.dist, hf: f.hf, rpe: f.rpe, st: "✓", src: f.src || "manuell", comp: compliance(0, f.dur, "✓"), free: true }));
+  return out.sort((a, b) => b.date - a.date);
+}
+/* Intensitätsverteilung nach Zeit: HF (Lauf: % LTHR, Rad: % Rad-LTHR), sonst RPE, sonst Einheitentyp. */
+function intensityDist(B, st, t, E, days) {
+  E = E || effective(B, st); const R = derive(B, st), z = [0, 0, 0], from = t - (days || 28);
+  const zoneOfX = (sport, hf, rpe, code) => {
+    if (num(hf) && (sport === "Lauf" || sport === "Rad")) { const L = sport === "Rad" ? R.radl : R.lthr, p = hf / L; return p < .89 ? 0 : p < .95 ? 1 : 2; }
+    const r = num(rpe) ? rpe : RPE_EST[code] || 4; return r <= 4 ? 0 : r <= 6 ? 1 : 2; };
+  E.filter(s => s.date >= from && s.date < t && isTrain(s)).forEach(s => { const x = statusOf(st, s, t); if (x !== "✓" && x !== "½") return; const l = val(st, "log:" + s.id) || {}, a = actual(st, s, t); if (!a.min) return;
+    const code = s.code, zi = ["I", "T", "HMZ", "TEST", "R4"].includes(code) && !num(l.hf) && !num(l.rpe) ? null : zoneOfX(s.sport, l.hf, l.rpe, code);
+    if (zi == null) { const hard = ["I", "TEST"].includes(code) ? .35 : .45; z[0] += a.min * (1 - hard); z[2] += a.min * hard; } else z[zi] += a.min; });
+  freeList(st).filter(f => f.date >= from && f.date < t && num(f.dur)).forEach(f => z[zoneOfX(f.sport, f.hf, f.rpe, "")] += f.dur);
+  const tot = z[0] + z[1] + z[2]; return { min: z, tot, pct: tot ? z.map(v => v / tot) : [0, 0, 0] };
+}
+function bests(B, st, t, E) {
+  E = E || effective(B, st); const runs = [];
+  E.filter(s => s.date <= t && s.sport === "Lauf" && isTrain(s)).forEach(s => { const x = statusOf(st, s, t); if (x !== "✓" && x !== "½") return; const a = actual(st, s, t); if (a.km) runs.push({ date: s.date, km: a.km, min: a.min, name: s.name }); });
+  freeList(st).filter(f => f.sport === "Lauf" && num(f.dist) && f.date <= t).forEach(f => runs.push({ date: f.date, km: f.dist, min: f.dur, name: f.name || "Lauf" }));
+  const rides = []; E.filter(s => s.date <= t && s.sport === "Rad" && isTrain(s)).forEach(s => { const x = statusOf(st, s, t); if (x === "✓" || x === "½") { const a = actual(st, s, t); rides.push({ date: s.date, km: a.km, min: a.min }); } });
+  freeList(st).filter(f => f.sport === "Rad" && f.date <= t).forEach(f => rides.push({ date: f.date, km: f.dist || 0, min: f.dur || 0 }));
+  const longRun = runs.slice().sort((a, b) => b.km - a.km)[0], fast = runs.filter(r => r.km >= 10 && r.min).sort((a, b) => a.min / a.km - b.min / b.km)[0], longRide = rides.slice().sort((a, b) => b.min - a.min)[0];
+  const W = weekStats(B, st, t, E).weeks.filter(w => w.past || w.cur), wk = W.map(w => ({ w: w.w, km: (w.sp.Lauf || {}).kmIs || 0, h: w.is / 60 })), topKm = wk.slice().sort((a, b) => b.km - a.km)[0], topH = wk.slice().sort((a, b) => b.h - a.h)[0];
+  return { longRun, fast, longRide, topKm: topKm && topKm.km ? topKm : null, topH: topH && topH.h ? topH : null };
+}
+
+/* ---------- v3.0 Leistung: Prognose mit Spanne, Gates, Verbesserungen ---------- */
+/* Riegel 1,06 gilt als optimistisch für Freizeitläufer (Vickers & Vertosick 2016), 1,08 als vorsichtige Annahme. */
+function progSpan(R, S) {
+  const opt = R.refHM * Math.pow(2, 1.06), kon = R.refHM * Math.pow(2, 1.08), tg = S.tgtM;
+  return { opt, kon, mid: (opt + kon) / 2, tg, gapMin: (opt - tg) * 1440, gapSkm: (opt - tg) * 86400 / MK, needHM: tg / Math.pow(2, 1.06), need10: tg / Math.pow(2, 1.06) / Math.pow(HMK / 10, 1.06) };
+}
+function gates(B, st, t, E) {
+  E = E || effective(B, st); const R = derive(B, st), P = progSpan(R, B.S), res = k => val(st, "test:" + k) || {}, T = typ => B.tests.filter(x => x.typ === typ), out = [];
+  const g = (name, date, ok, val2, target, how) => out.push({ name, date, st: ok === true ? "ok" : ok === false ? "miss" : date < t ? "open" : "next", val: val2, target, how });
+  const k10 = T("10K");
+  k10.forEach((x, i) => { const v = res(x.key).time; g(x.name, x.date, num(v) ? (i ? v <= P.need10 + 1 / 1440 : true) : null, num(v) ? hms(v) : "", i ? "≤ " + hms(P.need10) : "Ausgangswert", i ? "Schneller oder gleich = sub 1:30 im HM realistisch" : "Kalibriert Paces der Stufen 2 und 3"); });
+  const p38 = E.find(s => s.sport === "Lauf" && ["LR", "LRM"].includes(s.code) && s.km >= 36);
+  if (p38) { const x = statusOf(st, p38, t), a = actual(st, p38, t); g("Peak Long Run " + p38.km + " km", p38.date, x === "✓" || x === "½" ? a.km >= 34 : x === "✗" ? false : null, a.km ? r1(a.km) + " km" : "", "ohne Einbruch, HF-Drift < 8 %", "Bestätigt die Linz-Pace"); }
+  T("HM").forEach(x => { const v = res(x.key).time; g(x.name, x.date, num(v) ? v <= P.needHM + 1 / 86400 * 30 : null, num(v) ? hms(v) : "", "≤ " + hms(P.needHM), "Gate für 3:09 in Linz"); });
+  const c2 = B.tests.filter(x => x.typ === "CSS400"), cssV = d => { const a = B.tests.find(x => x.typ === "CSS400" && x.date === d), b = B.tests.find(x => x.typ === "CSS200" && x.date === d), va = a && res(a.key).time, vb = b && res(b.key).time; return num(va) && num(vb) ? (va - vb) / 2 : null; };
+  c2.forEach((x, i) => { const v = cssV(x.date); g(i ? "CSS-Test 2" : "CSS-Test 1", x.date, num(v) ? (i ? v <= 110 / 86400 : true) : null, num(v) ? mss(v) + " /100 m" : "", i ? "≤ 1:50 /100 m" : "Ausgangswert", "Schwimmzeit 38–40' in Allgäu"); });
+  const bg = T("BERG"); if (bg.length === 2) { const a = res(bg[0].key).time, b = res(bg[1].key).time; g("Bergtest 2", bg[1].date, num(a) && num(b) ? b <= a * .92 : null, num(b) ? hms(b) : "", num(a) ? "≤ " + hms(a * .92) + " (–8 %)" : "nach Bergtest 1", "Rad-Fortschritt bei gleicher HF"); }
+  return out.sort((a, b) => a.date - b.date);
+}
+/* Effizienz: Meter pro Herzschlag bei lockeren Läufen (Geschwindigkeit/HF). Steigt sie bei gleicher Belastung, verbessert sich die aerobe Fitness. */
+function efficiency(B, st, t, E) {
+  E = E || effective(B, st); const pts = [];
+  E.filter(s => s.date < t && s.sport === "Lauf" && ["E", "LR"].includes(s.code)).forEach(s => { const l = val(st, "log:" + s.id) || {}, x = statusOf(st, s, t); if ((x === "✓" || x === "½") && num(l.hf) && num(l.dist) && num(l.dur) && l.dur >= 20) pts.push({ date: s.date, v: l.dist * 1000 / l.dur / l.hf }); });
+  freeList(st).filter(f => f.sport === "Lauf" && num(f.hf) && num(f.dist) && num(f.dur) && f.dur >= 20 && f.date < t && (!num(f.rpe) || f.rpe <= 4)).forEach(f => pts.push({ date: f.date, v: f.dist * 1000 / f.dur / f.hf }));
+  return pts.sort((a, b) => a.date - b.date);
+}
+function improvements(B, st, t, E) {
+  E = E || effective(B, st); const TR = trends(B, st, t, E), out = [];
+  const add = (lab, a, b, fmt, better, unit, info) => { if (a == null || b == null) return; const d = b - a, good = better === "down" ? d < 0 : d > 0; out.push({ lab, from: fmt(a), to: fmt(b), delta: d, good: Math.abs(d) < 1e-9 ? null : good, txt: (d > 0 ? "+" : d < 0 ? "−" : "±") + fmt(Math.abs(d)) + (unit || ""), info }); };
+  if (TR.ac.length >= 2) add("Aerob-Check (Pace bei HF " + B.S.ac + ")", TR.ac[0].v, TR.ac[TR.ac.length - 1].v, v => mss(v), "down", " /km", "Schneller bei gleichem Puls = bessere Grundlage");
+  const ck = TR.chk.filter(k => num(k.puls)); if (ck.length >= 4) add("Ruhepuls (Ø 2 Wochen)", (ck[0].puls + ck[1].puls) / 2, (ck[ck.length - 1].puls + ck[ck.length - 2].puls) / 2, v => String(Math.round(v)), "down", " bpm", "Niedriger kann bessere Fitness heißen, steigt er, auf Erholung achten");
+  if (TR.vo2.length >= 2) add("VO2max Garmin", TR.vo2[0].v, TR.vo2[TR.vo2.length - 1].v, v => String(Math.round(v)), "up", "", "Schätzung der Uhr, Trend zählt");
+  if (TR.vdot.length >= 2) add("VDOT aus Tests", TR.vdot[0].v, TR.vdot[TR.vdot.length - 1].v, v => (Math.round(v * 10) / 10).toLocaleString("de-DE"), "up", "", "Aus 10-km-Test, HM, Marathon");
+  const ef = efficiency(B, st, t, E); if (ef.length >= 6) { const n = Math.min(4, Math.floor(ef.length / 2)), avg = a => a.reduce((x, p) => x + p.v, 0) / a.length; add("Effizienz lockerer Läufe", avg(ef.slice(0, n)), avg(ef.slice(-n)), v => (Math.round(v * 100) / 100).toLocaleString("de-DE"), "up", " m/Schlag", "Meter pro Herzschlag, erste vs. letzte " + n + " Läufe"); }
+  const lr = TR.lr.filter(r => r.is > 0); if (lr.length >= 2) add("Längster Lauf je Woche", lr[0].is, Math.max(...lr.slice(-4).map(r => r.is)), v => (Math.round(v * 10) / 10).toLocaleString("de-DE"), "up", " km", "Erste Woche vs. bester Wert der letzten 4 Wochen");
+  const run = TR.run.filter((r, i) => B.S.start + 7 * i + 6 < t); if (run.length >= 8) { const avg = a => a.reduce((x, r) => x + r.is, 0) / a.length; add("Laufumfang (Ø 4 Wochen)", avg(run.slice(0, 4)), avg(run.slice(-4)), v => String(Math.round(v)), "up", " km", "Erste vs. letzte 4 Wochen"); }
+  if (TR.css.length >= 2) add("CSS Schwimmen", TR.css[0].v, TR.css[TR.css.length - 1].v, v => mss(v), "down", " /100 m", "");
+  if (TR.berg.length >= 2) add("Bergtest", TR.berg[0].v, TR.berg[TR.berg.length - 1].v, v => hms(v), "down", "", "");
+  return out;
+}
+/* Ramp: Anstieg der Fitness (CTL) in 7 Tagen. Über 8 Punkte pro Woche gilt in der Praxis als steil (TrainingPeaks-Faustregel, keine Studie). */
+function rampRate(F, t) { const a = F.find(x => x.d === t), b = F.find(x => x.d === t - 7); return a && b ? a.ctl - b.ctl : null; }
+
+/* ---------- v3.0 KI-Coach: anonymisiertes Paket und Validator mit Leitplanken ----------
+   Im Paket: Planeinheiten (14 Tage), Ist-Werte (21 Tage), Form, Tests, Abwesenheitstage OHNE Grund.
+   Nicht im Paket: Krankheitsart, Region, Warnzeichen, Reiseort, Gewicht, Notizen, Schmerzwerte, API-Schlüssel. */
+const AI_DAYS = 14, AI_MAX = 12;
+function aiPacket(B, st, t, E) {
+  E = E || effective(B, st); const R = derive(B, st), F = formSeries(B, st, t, E), f = F.find(x => x.d === t) || {}, P = progSpan(R, B.S);
+  const priv = new Set(activeAdj(st).filter(a => /^sick/.test(a.key || "")).map(a => a.id));
+  const tag = s => ({ id: s.id, datum: wdD(s.date), d: s.date - t, sport: s.sport, typ: s.code, name: priv.has(s.adj) ? "angepasste Einheit" : s.name.replace(/^★\s*/, ""), prio: s.prio, km: s.km || 0, min: s.min || 0, hart: isHard(s), test: s.test || "" });
+  const sk = val(st, "sick"), away = [];
+  if (sk && num(sk.from)) for (let d = Math.max(sk.from, t - 21); d <= (num(sk.to) ? sk.to : t); d++) away.push(d - t);
+  Object.keys(st).filter(k => k.startsWith("trv:")).forEach(k => { const v = st[k].v; if (v && !v.del && num(v.from)) for (let d = Math.max(v.from, t - 21); d <= Math.min(v.to, t + AI_DAYS); d++) away.push(d - t); });
+  const plan = E.filter(s => s.date >= t && s.date < t + AI_DAYS && isTrain(s) && !statusOf(st, s, t)).map(tag);
+  const ist = E.filter(s => s.date < t && s.date >= t - 21 && isTrain(s)).map(s => { const l = val(st, "log:" + s.id) || {}, a = actual(st, s, t); const x0 = statusOf(st, s, t); return Object.assign(tag(s), { status: x0 === "krank" ? "abwesend" : x0 || "offen", istMin: Math.round(a.min), istKm: r1(a.km), hf: l.hf ?? null, rpe: l.rpe ?? null }); });
+  const frei = freeList(st).filter(x => x.date < t && x.date >= t - 21).map(x => ({ d: x.date - t, sport: x.sport, min: x.dur, km: x.dist || 0, hf: x.hf ?? null, rpe: x.rpe ?? null }));
+  const lr30 = longestDone(E, st, t, t - 30, t - 1);
+  return { app: "Performance Lab", version: "3.0", heute: wdD(t) + sd(t).getUTCFullYear(), ziel: { rennen: (B.S.events.find(e => e.date >= t) || {}).name || "", in_tagen: ((B.S.events.find(e => e.date >= t) || {}).date || t) - t, marathon_ziel: hms(B.S.tgtM), prognose: hms(P.opt) + "–" + hms(P.kon) },
+    zonen: { lthr: Math.round(R.lthr), hfmax: B.S.hfmax, ruhepuls: B.S.rest }, form: { fitness: Math.round(f.ctl || 0), ermuedung: Math.round(f.atl || 0), form: Math.round(f.tsb || 0) },
+    laengster_lauf_30d_km: r1(lr30), abwesend_tage_rel: [...new Set(away)].sort((a, b) => a - b), ist_21_tage: ist, frei_21_tage: frei, plan_14_tage: plan,
+    regeln: ["Nur Einheiten aus plan_14_tage ändern (id).", "Tests und Rennen nicht ändern.", "Wochenumfang höchstens 110 % des Plans.", "Long Run höchstens 10 % über laengster_lauf_30d_km.", "Höchstens " + AI_MAX + " Änderungen.", "Keine medizinischen Aussagen."] };
+}
+const AI_PROMPT = 'Du bist ein erfahrener Lauf- und Triathloncoach. Prüfe das JSON-Paket (Ist-Daten der letzten 21 Tage, Plan der nächsten 14 Tage) und schlage nur nötige Anpassungen vor, um Ermüdung, Lücken und Abwesenheiten sinnvoll aufzufangen. Halte dich an "regeln". Antworte ausschließlich mit JSON in diesem Format: {"zusammenfassung":"1-3 Sätze auf Deutsch","aenderungen":[{"id":"<id aus plan_14_tage>","aktion":"aendern|streichen|verschieben","min":<Zahl>,"km":<Zahl>,"locker":true|false,"auf_tag":<relative Tageszahl, nur bei verschieben>,"grund":"kurz auf Deutsch"}]}. Wenn keine Änderung nötig ist, gib eine leere Liste zurück.';
+function aiValidate(B, st, t, resp) {
+  const E = effective(B, st), errs = [], ops = [], lines = [];
+  let o = resp; if (typeof o === "string") { const m = o.match(/\{[\s\S]*\}/); if (!m) return { ok: false, errs: ["Keine JSON-Antwort gefunden."] }; try { o = JSON.parse(m[0]); } catch (e) { return { ok: false, errs: ["JSON nicht lesbar: " + e.message] }; } }
+  if (!o || !Array.isArray(o.aenderungen)) return { ok: false, errs: ["Feld \"aenderungen\" fehlt."] };
+  if (o.aenderungen.length > AI_MAX) errs.push("Mehr als " + AI_MAX + " Änderungen, nur die ersten " + AI_MAX + " werden geprüft.");
+  const lr30 = longestDone(E, st, t, t - 30, t - 1), seen = new Set();
+  const weekMin = w => B.plan.filter(s => s.w === w && isTrain(s)).reduce((a, s) => a + (s.min || 0), 0), wkCur = w => E.filter(s => s.w === w && isTrain(s)).reduce((a, s) => a + (s.min || 0), 0), wkDelta = {};
+  const away = d => sickOn(st, d, t) || Object.keys(st).some(k => k.startsWith("trv:") && st[k].v && !st[k].v.del && d >= st[k].v.from && d <= st[k].v.to);
+  o.aenderungen.slice(0, AI_MAX).forEach((c, i) => {
+    const n = "Änderung " + (i + 1) + ": ", s = E.find(x => x.id === c.id);
+    if (!s) { errs.push(n + "unbekannte Einheit " + String(c.id).slice(0, 40)); return; }
+    if (seen.has(s.id)) { errs.push(n + "Einheit doppelt"); return; } seen.add(s.id);
+    if (s.date < t || s.date >= t + AI_DAYS) { errs.push(n + s.name + " liegt außerhalb der nächsten " + AI_DAYS + " Tage"); return; }
+    if (s.test) { errs.push(n + s.name + " ist ein Test oder Rennen, wird nicht geändert"); return; }
+    if (statusOf(st, s, t)) { errs.push(n + s.name + " ist schon eingetragen"); return; }
+    const why = String(c.grund || "").slice(0, 160), note = "KI: " + why;
+    if (c.aktion === "streichen") { ops.push({ type: "drop", id: s.id, note }); wkDelta[s.w] = (wkDelta[s.w] || 0) - (s.min || 0); return; }
+    if (c.aktion === "verschieben") { const d = t + Math.round(Number(c.auf_tag));
+      if (!num(d) || d < t || d >= t + AI_DAYS) { errs.push(n + "Zieltag ungültig"); return; }
+      if (E.some(x => x.date === d && x.test && !x.dropped)) { errs.push(n + "Zieltag hat einen Test oder ein Rennen"); return; }
+      if (away(d)) { errs.push(n + "Zieltag liegt in Krankheit oder Reise"); return; }
+      const wT = weekOf(B, d); if (wT !== s.w) { wkDelta[wT] = (wkDelta[wT] || 0) + (s.min || 0); wkDelta[s.w] = (wkDelta[s.w] || 0) - (s.min || 0); }
+      if (isHard(s) && E.some(x => Math.abs(x.date - d) <= 1 && x.id !== s.id && isHard(x) && x.sport === s.sport && !x.dropped)) { errs.push(n + "harte Einheit direkt neben einer anderen harten Einheit"); return; }
+      const cc = cloneTo(s, d, tStart(s.time), "ai"); cc.note = note; ops.push({ type: "drop", id: s.id, note }, { type: "add", s: cc }); return; }
+    if (c.aktion === "aendern") {
+      let min = num(Number(c.min)) && Number(c.min) > 0 ? r5(Number(c.min)) : s.min, km = num(Number(c.km)) && Number(c.km) >= 0 ? r1(Number(c.km)) : s.km;
+      if (min > s.min * 1.25) { errs.push(n + "mehr als +25 % Dauer, auf +25 % begrenzt"); min = r5(s.min * 1.25); }
+      if (km > (s.km || 0)) { const byTime = r1((s.km || 0) * min / (s.min || min) * 1.05); if (km > byTime) { errs.push(n + "Distanz passt nicht zur Dauer, begrenzt"); km = Math.max(s.km || 0, byTime); } }
+      if (s.sport === "Lauf" && km > (s.km || 0) && km >= 12) { const capL = lr30 ? Math.round(lr30 * 1.1) : s.km || 0; if (km > capL) { errs.push(n + (lr30 ? "Long Run über +10 % zum längsten Lauf der letzten 30 Tage, begrenzt" : "ohne Lauf in den letzten 30 Tagen keine Verlängerung")); km = Math.max(s.km || 0, capL); } }
+      const patch = c.locker && isHard(s) ? Object.assign(lockerPatch(s, min / (s.min || min), note), { min, km, time: timeRange(tStart(s.time), min) }) : { min, km, time: timeRange(tStart(s.time), min) };
+      wkDelta[s.w] = (wkDelta[s.w] || 0) + min - (s.min || 0); ops.push({ type: "edit", id: s.id, patch, note }); return; }
+    errs.push(n + "Aktion unbekannt: " + String(c.aktion).slice(0, 20));
+  });
+  Object.keys(wkDelta).forEach(w => { const base = weekMin(+w); if (base && (wkCur(+w) + wkDelta[w]) > base * 1.1 && wkDelta[w] > 0) { errs.push("Woche " + w + ": Umfang über 110 %, Erhöhungen dieser Woche verworfen"); for (let i = ops.length - 1; i >= 0; i--) { const op = ops[i], s = E.find(x => x.id === op.id); if ((op.type === "edit" && s && s.w === +w && op.patch.min > s.min) || (op.type === "add" && weekOf(B, op.s.date) === +w && op.s.w !== +w)) { if (op.type === "add") { const di = ops.findIndex(z => z.type === "drop" && z.id === String(op.s.id).split("~")[0]); ops.splice(i, 1); if (di >= 0) { ops.splice(di, 1); i--; } } else ops.splice(i, 1); } } } });
+  const p = { key: "ai:" + t + ":" + Date.now(), sev: "info", title: "KI-Coach: " + (ops.length ? ops.filter(o2 => o2.type !== "add").length + " Änderungen" : "keine Änderung"), why: String(o.zusammenfassung || "").slice(0, 400), ops, needsOk: true };
+  p.lines = describeOps(ops, E);
+  return { ok: true, p, errs };
+}
+
+
+/* ---------- v3.0 Zurückschreiben ins Original-Excel (zellgenau, Formate bleiben) ----------
+   ZIP lesen/schreiben mit DecompressionStream/CompressionStream ("deflate-raw"), ohne Zusatzbibliothek. */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function streamBytes(u8, Kind, fmt) { const s = new Blob([u8]).stream().pipeThrough(new Kind(fmt)); return new Uint8Array(await new Response(s).arrayBuffer()); }
+function unzipIndex(u8) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); let e = u8.length - 22;
+  while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--; if (e < 0) throw new Error("Keine gültige xlsx-Datei (ZIP-Verzeichnis fehlt).");
+  const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true); const out = [];
+  for (let i = 0; i < n; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("ZIP-Verzeichnis beschädigt.");
+    const method = dv.getUint16(p + 10, true), time = dv.getUint16(p + 12, true), date = dv.getUint16(p + 14, true), crc = dv.getUint32(p + 16, true), csize = dv.getUint32(p + 20, true), usize = dv.getUint32(p + 24, true);
+    const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl)), lnl = dv.getUint16(off + 26, true), lxl = dv.getUint16(off + 28, true), ds = off + 30 + lnl + lxl;
+    out.push({ name, method, time, date, crc, csize, usize, raw: u8.subarray(ds, ds + csize) }); p += 46 + nl + xl + cl;
+  }
+  return out;
+}
+async function zipText(en) { const b = en.method === 0 ? en.raw : await streamBytes(en.raw, DecompressionStream, "deflate-raw"); return new TextDecoder().decode(b); }
+async function zipBuild(entries) {
+  const parts = [], cd = []; let off = 0; const te = new TextEncoder();
+  for (const en of entries) {
+    let raw = en.raw, crc = en.crc, usize = en.usize, method = en.method;
+    if (en.text != null) { const u = te.encode(en.text); crc = crc32(u); usize = u.length; raw = await streamBytes(u, CompressionStream, "deflate-raw"); method = 8; }
+    const nm = te.encode(en.name), lh = new Uint8Array(30 + nm.length), lv = new DataView(lh.buffer);
+    lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0, true); lv.setUint16(8, method, true); lv.setUint16(10, en.time || 0, true); lv.setUint16(12, en.date || 0x21, true);
+    lv.setUint32(14, crc, true); lv.setUint32(18, raw.length, true); lv.setUint32(22, usize, true); lv.setUint16(26, nm.length, true); lv.setUint16(28, 0, true); lh.set(nm, 30);
+    const ch = new Uint8Array(46 + nm.length), cv = new DataView(ch.buffer);
+    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(8, 0, true); cv.setUint16(10, method, true); cv.setUint16(12, en.time || 0, true); cv.setUint16(14, en.date || 0x21, true);
+    cv.setUint32(16, crc, true); cv.setUint32(20, raw.length, true); cv.setUint32(24, usize, true); cv.setUint16(28, nm.length, true); cv.setUint32(42, off, true); ch.set(nm, 46);
+    parts.push(lh, raw); cd.push(ch); off += lh.length + raw.length;
+  }
+  const cdl = cd.reduce((a, c) => a + c.length, 0), end = new Uint8Array(22), ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, entries.length, true); ev.setUint16(10, entries.length, true); ev.setUint32(12, cdl, true); ev.setUint32(16, off, true);
+  const all = new Uint8Array(off + cdl + 22); let p = 0; for (const x of parts.concat(cd, [end])) { all.set(x, p); p += x.length; } return all;
+}
+const xmlEsc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+const colNum = c => c.split("").reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
+/* Setzt Zellen eines Blatts. val: Zahl, String oder null (leeren). Stil (s=) bleibt, Formeln werden nur dort ersetzt, wo die App bewusst schreibt. */
+function patchSheet(xml, cells) {
+  const byRow = {}; Object.keys(cells).forEach(ref => { const m = ref.match(/^([A-Z]+)(\d+)$/); (byRow[m[2]] = byRow[m[2]] || []).push([m[1], cells[ref]]); });
+  const mk = (ref, sAttr, v) => v == null || v === "" ? `<c r="${ref}"${sAttr}/>` : typeof v === "number" ? `<c r="${ref}"${sAttr}><v>${v}</v></c>` : `<c r="${ref}"${sAttr} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+  return xml.replace(/<row r="(\d+)"([^>]*?)(\/>|>([\s\S]*?)<\/row>)/g, (all, rn, attrs, tail, inner) => {
+    const todo = byRow[rn]; if (!todo) return all; inner = inner || "";
+    todo.forEach(([col, v]) => {
+      const ref = col + rn, re = new RegExp('<c r="' + ref + '"([^>]*?)(?:/>|>[\\s\\S]*?</c>)');
+      const m = inner.match(re);
+      if (v && typeof v === "object") { if (m && /<f[ >]/.test(m[0])) return; v = v.soft; }
+      if (m) { const sAttr = (m[1].match(/ s="\d+"/) || [""])[0]; inner = inner.replace(re, mk(ref, sAttr, v)); return; }
+      const cells2 = [...inner.matchAll(/<c r="([A-Z]+)\d+"/g)], after = cells2.find(c => colNum(c[1]) > colNum(col)), nc = mk(ref, "", v);
+      inner = after ? inner.slice(0, after.index) + nc + inner.slice(after.index) : inner + nc;
+    });
+    return `<row r="${rn}"${attrs}>${inner}</row>`;
+  });
+}
+function wbPaths(wbXml, relXml) {
+  const rel = {}; [...relXml.matchAll(/<Relationship [^>]*?Id="([^"]+)"[^>]*?Target="([^"]+)"/g)].forEach(m => rel[m[1]] = m[2]);
+  [...relXml.matchAll(/<Relationship [^>]*?Target="([^"]+)"[^>]*?Id="([^"]+)"/g)].forEach(m => rel[m[2]] = rel[m[2]] || m[1]);
+  const out = {}; [...wbXml.matchAll(/<sheet [^>]*?name="([^"]+)"[^>]*?r:id="([^"]+)"/g)].forEach(m => { const t = rel[m[2]]; if (t) out[m[1].replace(/&amp;/g, "&")] = t.startsWith("/") ? t.slice(1) : "xl/" + t.replace(/^\.\//, ""); });
+  return out;
+}
+/* Baut die Zellwerte für Plan, Wochen und Tests. Krankheitsgründe, Reiseorte und Gewicht werden nicht geschrieben. */
+function writeBackCells(B0, B, st, t) {
+  const E = effective(B, st), byId = new Map(E.map(s => [s.id, s])), plan = {}, weeks = {}, tests = {}, stat = { status: 0, ist: 0, changed: 0, moved: 0, chk: 0, tests: 0, free: freeList(st).length };
+  const priv = new Set(activeAdj(st).filter(a => /^sick/.test(a.key || "")).map(a => a.id));
+  B0.plan.forEach(o => {
+    if (!o.row) return; const s = byId.get(o.id); if (!s) return; const r = o.row;
+    const x = s.date <= t ? statusOf(st, s, t) : (val(st, "log:" + s.id) || {}).st || "", l = val(st, "log:" + s.id) || {};
+    const stv = x === "krank" ? "✗" : ["✓", "½", "✗"].includes(x) ? x : null;
+    plan["K" + r] = stv; if (stv) stat.status++;
+    if (x === "krank" && !s.dropped && !s.edited) plan["V" + r] = "[App] krank" + (o.hint ? " " + o.hint : "");
+    const ik = num(l.dist) ? r1(l.dist) : num(l.ikm) ? l.ikm : null, im = num(l.dur) ? Math.round(l.dur) : num(l.imin) ? l.imin : null;
+    plan["L" + r] = stv && stv !== "✗" ? ik : null; plan["M" + r] = stv && stv !== "✗" ? im : null; if (ik != null || im != null) stat.ist++;
+    if (s.dropped) {
+      const mv = E.find(y => y.movedFrom === s.date && String(y.id).startsWith(s.id + "~") && !y.dropped);
+      plan["F" + r] = (mv ? "[verschoben] " : "[entfällt] ") + o.name.replace(/^\[(entfällt|verschoben|App)\]\s*/, "");
+      plan["I" + r] = 0; plan["J" + r] = 0;
+      plan["V" + r] = "[App] " + (mv ? "Verschoben auf " + wdD(mv.date) + (mv.time ? " " + mv.time : "") + "." : priv.has(s.adj) ? "Angepasst." : (s.note || "Entfällt.")) + (o.hint ? " " + o.hint : "");
+      mv ? stat.moved++ : stat.changed++;
+    } else if (s.edited) {
+      plan["F" + r] = priv.has(s.adj) ? "[App] Angepasste Einheit" : "[App] " + s.name.replace(/^★\s*/, "");
+      if (s.km !== o.km) plan["I" + r] = s.km || 0; if (s.min !== o.min) plan["J" + r] = s.min || 0;
+      plan["V" + r] = "[App] " + (priv.has(s.adj) ? "Angepasst." : "Ursprünglich: " + o.name + ". " + (s.note || "")) + (o.hint ? " " + o.hint : "");
+      stat.changed++;
+    }
+  });
+  Object.keys(B0.weeks || {}).forEach(w => { const r = B0.weeks[w].row, c = val(st, "chk:" + w); if (!r || !c) return; weeks["D" + r] = num(c.puls) ? c.puls : null; weeks["E" + r] = num(c.pain) ? c.pain : null; weeks["F" + r] = num(c.feel) ? c.feel : null; stat.chk++; });
+  B0.tests.forEach(T => { const r = T.row, v = val(st, "test:" + T.key); if (!r || !v) return; if (num(v.time)) tests["F" + r] = v.time; if (num(v.hf)) tests["G" + r] = v.hf; if (num(v.time) || num(v.hf)) stat.tests++; });
+  return { plan, weeks, tests, stat };
+}
+async function writeBack(XLSX, src, B, st, t) {
+  const B0 = parseWorkbook(XLSX, src); if (!B0.plan.length || !B0.plan[0].row) throw new Error("Plan-Zeilen nicht gefunden.");
+  const ids = new Set(B.plan.map(s => s.id)), miss = B0.plan.filter(s => !ids.has(s.id)).length;
+  if (miss > B0.plan.length * .1) throw new Error("Die gespeicherte Excel passt nicht zum Plan in der App (" + miss + " Einheiten unbekannt). Bitte den aktuellen Trainingsplan wählen.");
+  const W = writeBackCells(B0, B, st, t), Z = unzipIndex(src), get = n => Z.find(e => e.name === n);
+  const paths = wbPaths(await zipText(get("xl/workbook.xml")), await zipText(get("xl/_rels/workbook.xml.rels")));
+  const patch = { [paths.Plan]: W.plan, [paths.Wochen]: W.weeks, [paths.Tests]: W.tests };
+  const out = [];
+  for (const en of Z) {
+    if (en.name === "xl/calcChain.xml") continue;
+    if (patch[en.name] && Object.keys(patch[en.name]).length) { out.push(Object.assign({}, en, { text: patchSheet(await zipText(en), patch[en.name]) })); continue; }
+    if (en.name === "xl/workbook.xml") { let x = await zipText(en); x = /<calcPr[^>]*fullCalcOnLoad/.test(x) ? x : x.replace(/<calcPr([^>]*?)\/>/, '<calcPr$1 fullCalcOnLoad="1"/>'); out.push(Object.assign({}, en, { text: x })); continue; }
+    if (en.name === "[Content_Types].xml") { out.push(Object.assign({}, en, { text: (await zipText(en)).replace(/<Override [^>]*calcChain[^>]*\/>/, "") })); continue; }
+    if (en.name === "xl/_rels/workbook.xml.rels") { out.push(Object.assign({}, en, { text: (await zipText(en)).replace(/<Relationship [^>]*calcChain[^>]*\/>/, "") })); continue; }
+    out.push(en);
+  }
+  return { bytes: await zipBuild(out), stat: W.stat };
+}
 /* ---------- Synchronisation: Last-Writer-Wins je Schlüssel ---------- */
 function merge(a, b) { const o = Object.assign({}, a); for (const k in b) if (!o[k] || (b[k].t || 0) > (o[k].t || 0)) o[k] = b[k]; return o; }
 
@@ -754,6 +1193,10 @@ function ics(B, st, t) {
   L.push("END:VCALENDAR"); return L.join("\r\n");
 }
 
-G.Engine = { DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
+/* v3.0: Darf die Automatik diesen Vorschlag übernehmen? Nicht bei Tests, Rennen, Long-Run-Hinweis oder manuellen Aktionen. */
+function autoOk(p, E, st) { if (!p || !p.ops || !p.ops.length || p.needsOk) return false; if (/^(lrcap|man|mand|ai):/.test(p.key)) return false;
+  if (st && p.ops.some(o => val(st, "nou:" + (o.type === "add" ? String(o.s.id).split("~")[0] : o.id)))) return false;
+  return !p.ops.some(o => isTestOp(o, E) || (o.type !== "add" && (E.find(x => x.id === o.id) || {}).test === "race")); }
+G.Engine = { writeBack, writeBackCells, patchSheet, unzipIndex, zipText, zipBuild, crc32, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
   util: { timeRange, hhmm, sd, serialOf, fmtD, wdD, mss, hms, r1, WD, WDL, tStart, RACE_TYPES, stageOf } };
 })(typeof window !== "undefined" ? window : globalThis);

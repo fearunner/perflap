@@ -1,4 +1,17 @@
-# Performance Lab 3.0: Klick-Anleitung
+# Performance Lab 3.1: Klick-Anleitung
+
+## Neu in 3.1
+
+- **Coach-Briefing unter Heute:** Ganz oben steht, worauf es heute ankommt, deine Bereitschaft (Bereit, Frisch, Müde oder Pause) und dein Essen für den Tag. Dazu kommen die Verpflegung zur Einheit, der Countdown und der Knopf **KI-Coach fragen**.
+- **KI-Coach direkt sichtbar:** Ein Tipp auf **KI-Coach fragen** erklärt, was er macht und welche Daten er sieht. Mit **Einschalten** geht es los.
+- **Einheit als Workout-Karte:**
+  - Oben stehen Distanz, Dauer, Zielpace, Puls und Intensität.
+  - Darunter folgt „darum geht es“ mit „So läufst du richtig“, die Quellen sind aufklappbar.
+  - Der **Ablauf** zeigt Schritte und ein Intensitätsprofil, zum Beispiel Einlaufen, 5 × 1 km mit Zielpace und Trabpause, dann Auslaufen.
+- **Übungen mit Anleitung und Video:** Kraft, Mobility, Schwimmdrills und Freiwasser zeigen jede Übung einzeln. Ein Tipp öffnet Ausführung, Hinweise, typische Fehler, den Nutzen für dich und eine leichtere Variante. **Video ansehen** öffnet eine YouTube-Suche zur Übung.
+- **Monat:** Ein Tipp auf einen Tag öffnet den Tag mit allen Einheiten zum Antippen, statt in die Woche zu springen.
+- **Tag:** Die Karten lassen sich als Ganzes antippen.
+- **Mac:** Der Detailbereich rechts zeigt sofort die heutige Einheit.
 
 ## Neu in 3.0
 

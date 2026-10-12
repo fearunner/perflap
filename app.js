@@ -1,4 +1,4 @@
-/* Performance Lab 3.0. Oberfläche. Daten bleiben auf dem Gerät (IndexedDB) und in der Sync-Datei, die du selbst wählst.
+/* Performance Lab 3.1. Oberfläche. Daten bleiben auf dem Gerät (IndexedDB) und in der Sync-Datei, die du selbst wählst.
    Keine externen Requests, kein Tracking. Planlogik ausschließlich in engine.js. */
 (function () {
 "use strict";
@@ -48,7 +48,7 @@ const ICON = {
   Triathlon: '<path d="M5 21V4M5 4.5c5-2.5 7 2.5 13 0v8c-6 2.5-8-2.5-13 0"/>',
   Sonstiges: '<path d="M3 20l6-11 4 6 3-4 5 9z"/>' };
 const icon = (k, cls) => `<svg class="ico ${cls || ""}" viewBox="0 0 24 24" aria-hidden="true">${ICON[k] || ICON.Sonstiges}</svg>`;
-const UI = { fork: '<path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v5a2 2 0 0 0 4 0V3M17 21V3c-2 1.5-3 4-3 7s1 4 3 4"/>',
+const UI = { play: '<path d="M8 5.5v13l10.5-6.5z"/>', fork: '<path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v5a2 2 0 0 0 4 0V3M17 21V3c-2 1.5-3 4-3 7s1 4 3 4"/>',
   plus: '<path d="M12 5v14M5 12h14"/>', check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>', half: '<path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/><circle cx="12" cy="12" r="8"/>',
   chev: '<path d="M9 5l7 7-7 7"/>', back: '<path d="M15 5l-7 7 7 7"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', more: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
   today: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', plan: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8.5 3v4M15.5 3v4"/>',
@@ -102,7 +102,7 @@ function hfMid(z) { const m = String(z.hf || "").match(/(\d{2,3})\D+(\d{2,3})/);
 function toast(msg, opt) {
   opt = opt || {}; const el = $("#toast");
   el.innerHTML = `<span class="tmsg">${opt.icon ? ui(opt.icon) : ""}${esc(msg)}</span>${opt.undo ? '<button class="tbtn" id="tundo">Rückgängig</button>' : ""}${opt.action ? `<button class="tbtn" id="tact">${esc(opt.action[0])}</button>` : ""}`;
-  el.className = "toast show" + (opt.cele ? " cele" : ""); el.hidden = false;
+  el.className = "toast show" + (opt.cele ? " cele" : "") + (SHEETS.length || $(".sheet-wrap") ? " top" : ""); el.hidden = false;
   if (opt.undo) $("#tundo").onclick = () => { opt.undo(); hideToast(); };
   if (opt.action) $("#tact").onclick = () => { hideToast(); opt.action[1](); };
   clearTimeout(toast.t); toast.t = setTimeout(hideToast, opt.undo || opt.action ? 6500 : 3200);
@@ -257,6 +257,28 @@ function heroPick(c) {
   for (let d = t + 1; d < t + 10; d++) { const n = dayItems(c, d).filter(x => !x.isFree && E.isTrain(x)); if (n.length) return { s: n[0], when: dayLabel(d, t), doneToday: it.length > 0 }; }
   return null;
 }
+
+/* ---------- v3.1 Coach-Briefing (Heute): Tageslage in Klartext wie Whoop/Garmin Morning Report ---------- */
+function briefing(c, h) {
+  const t = c.t, F = c.F.find(x => x.d === t), v = verdict(c.cw), sick = get("sick"), sickNow = sick && num(sick.from) && !num(sick.to);
+  const tsb = F ? F.tsb : 0, ctl = F ? F.ctl : 0;
+  const ready = sickNow ? { cls: "bad", lab: "Pause", txt: "Erst gesund werden." } : v.cls === "bad" ? { cls: "bad", lab: "Niedrig", txt: "Check-in rot: heute nur locker." } : v.cls === "warn" ? { cls: "warn", lab: "Mittel", txt: "Warnsignal im Check-in, harte Reize dosieren." } : tsb < -0.3 * Math.max(ctl, 10) ? { cls: "warn", lab: "Müde", txt: "Ermüdung hoch, Lockeres wirklich locker." } : tsb > 5 ? { cls: "ok", lab: "Frisch", txt: "Gute Voraussetzungen für Qualität." } : { cls: "ok", lab: "Bereit", txt: "Belastung und Erholung im Gleichgewicht." };
+  const s = h && h.when === "Heute" ? h.s : null, wy = s && E.whyOf(s);
+  const N = KG() ? E.dayNeeds(E.dayType(c.Ex, ST, t), KG()) : null;
+  const autoN = Object.keys(ST).filter(k => k.startsWith("adj:")).map(k => ST[k].v).filter(a => a && a.auto && !a.undone && Date.now() - a.created < 7 * 864e5).length;
+  const nx = B.S.events.filter(e => e.date >= t).sort((a, b) => a.date - b.date)[0];
+  const focus = s ? (wy ? wy.zweck.split(/[.:]/)[0] + "." : "") : "Schlaf, Essen und lockere Bewegung machen dich schneller.";
+  const hard = s && E.isHard(s), headline = sickNow ? "Heute zählt Erholung" : !s ? (h ? "Ruhetag, morgen geht es weiter" : "Ruhetag") : ready.cls === "bad" ? "Heute nur locker" : s.test === "race" ? "Renntag. Vertrau deiner Vorbereitung" : s.test === "test" ? "Testtag: ausgeruht und gleichmäßig" : s.code === "LR" ? "Heute zählt Ausdauer" : s.code === "LRM" ? "Heute zählt Ausdauer mit Marathontempo" : hard ? "Heute zählt Qualität" : "Heute locker bleiben";
+  let x = `<section class="brief rise" aria-label="Coach-Briefing"><div class="br-top"><div><span class="br-k">${ui("sync")}Dein Coach</span><h2>${esc(headline)}</h2></div><button class="readyb ${ready.cls}" data-act="checkin" data-w="${c.cw}" aria-label="Bereitschaft ${esc(ready.lab)}, Check-in öffnen"><b>${esc(ready.lab)}</b><span>Form ${tsb > 0 ? "+" : ""}${Math.round(tsb)}</span></button></div>`;
+  x += `<p class="br-txt">${esc(focus)} ${esc(ready.txt)}</p>`;
+  x += `<div class="br-chips">`;
+  if (N) x += `<button class="bchip" data-act="nut" data-v="${t}">${ui("fork")}<span><b>${N.khT} g</b> KH · ${N.pT} g Eiweiß</span></button>`; else x += `<button class="bchip" data-act="kg">${ui("fork")}<span>Ernährung: Gewicht eintragen</span></button>`;
+  if (s && (s.min >= 45 || s.test)) x += `<button class="bchip" data-act="fuel" data-id="${esc(s.id)}">${ui("fork")}<span>Verpflegung zur Einheit</span></button>`;
+  if (autoN) x += `<button class="bchip" data-tab="prof">${ui("sync")}<span>${autoN} Anpassung${autoN > 1 ? "en" : ""} diese Woche</span></button>`;
+  if (nx) x += `<span class="bchip static">${ui("flag")}<span><b>${nx.date - t}</b> Tage · ${esc(String(nx.name).replace("Olympische Distanz", "OD").replace(" Triathlon Classic", "").replace("Marathon ", ""))}</span></span>`;
+  x += `</div><button class="aibtn" data-act="ai">${ui("sync")}<span><b>KI-Coach fragen</b><small>${AION() ? "Nächste 14 Tage prüfen lassen" : "Optional: Plan von KI prüfen lassen"}</small></span>${ui("chev", "chev")}</button></section>`;
+  return x;
+}
 function vHeute(c) {
   const t = c.t, h = heroPick(c), v = verdict(c.cw), sick = get("sick"), sickNow = sick && num(sick.from) && !num(sick.to);
   LP = c.P;
@@ -265,6 +287,7 @@ function vHeute(c) {
   x += banners();
   if (sickNow) { const sc = E.SICK_CAT[sick.cat], hals = sick.cat === "hals", inj = sick.cat === "verletzung" && E.REGIONS[sick.region];
     x += `<div class="banner ${hals ? "" : "err"}">${ui("sick")}<div class="tx"><b>${esc(sc ? sc.short : "Krank")} seit ${esc(U.wdD(sick.from))}</b> ${hals ? "Nur locker, höchstens 45 Minuten." : inj ? "Pausiert: " + esc(inj.aff.join(", ")) + ". Rest nur schmerzfrei." : "Kein Training, nichts zählt als verpasst."}</div><span class="bt" style="display:flex;gap:6px">${sc ? "" : `<button class="btn sm ghost" data-act="sick">Details</button>`}<button class="btn sm" data-act="sickend">Wieder gesund</button></span></div>`; }
+  x += briefing(c, h);
   // Hero
   if (h) {
     const s = h.s, z = zoneOf(s, c), S = sp(s.sport), wake = s.wake && h.when === "Morgen" ? "Wecker " + s.wake : s.wake && h.when === "Heute" ? "Wecker " + s.wake : "";
@@ -287,8 +310,7 @@ function vHeute(c) {
   x += `<div class="trackcard">${trackSvg(W.so ? W.is / W.so : 0, W.keyTot ? W.keyDone / W.keyTot : 0, "Woche: " + Math.round(W.so ? W.is / W.so * 100 : 0) + " Prozent der Stunden, " + W.keyDone + " von " + W.keyTot + " Schlüsseleinheiten")}
     <div class="tstat">${kv("Stunden", "var(--tartan)", de(W.is / 60), de(W.so / 60), " h")}${kv("Schlüssel", "var(--gold-s)", W.keyDone, W.keyTot, "")}
     <button class="light ${v.cls}" data-act="checkin" data-w="${c.cw}"><i></i><span>${esc(v.txt)}</span></button></div></div>`;
-  x += nutRow(c, t);
-  if (AION()) x += `<div class="grp" style="margin-top:12px"><button class="row" data-act="ai"><span class="badge-ic" style="--c:var(--lane);--t:var(--lane-t)">${ui("sync")}</span><span class="tx"><span class="t1">KI-Coach fragen</span><span class="t2">Nächste 14 Tage prüfen lassen</span></span>${ui("chev", "chev")}</button></div>`;
+
   // Countdown
   const fut = B.S.events.filter(e => e.date >= t).sort((a, b) => a.date - b.date);
   if (fut.length) x += `<div class="cd" role="list">${fut.map((e, i) => `<div class="it${i ? "" : " first"}" role="listitem"><b>${e.date - t}</b><span>Tage · ${esc(String(e.name).replace("Olympische Distanz", "OD").replace("Triathlon Classic", "Triathlon"))}</span></div>`).join("")}</div>`;
@@ -316,16 +338,45 @@ function sessView(id, D) {
   if (s.isFree) return head + `<div class="grp"><div class="row plain"><span class="tx"><span class="t1">${esc(S.lab)}</span><span class="t2">${[s.min ? durStr(s.min) : "", s.km ? kmStr(s.km, s.sport) : "", num(s.hf) ? "Ø " + s.hf + " bpm" : "", num(s.rpe) ? "RPE " + s.rpe : "", num(s.hm) ? s.hm + " Hm" : ""].filter(Boolean).join(" · ")}</span></span></div></div>${s.note ? `<p class="note">${esc(s.note)}</p>` : ""}<div class="sh-foot"><button class="btn" data-act="freeedit" data-id="${esc(s.id)}">Bearbeiten</button><button class="btn ghost" data-act="freedel" data-id="${esc(s.id)}">${ui("trash")}Löschen</button></div>`;
   const a = E.actual(ST, s, t), doneish = st === "✓" || st === "½";
   let x = head;
-  x += `<div class="planned" style="margin-bottom:12px">${s.km ? `<span>Soll <b>${esc(kmStr(s.km, s.sport))}</b></span>` : ""}${s.min ? `<span><b>${esc(durStr(s.min))}</b></span>` : ""}${s.prio ? `<span>Prio <b>${esc(s.prio)}</b></span>` : ""}${s.wake ? `<span>Wecker <b>${esc(s.wake)}</b></span>` : ""}</div>`;
-  if (z.pace || z.hf) x += `<div class="bib" style="margin-bottom:12px"><div class="bd" style="padding:14px 16px"><div class="zone" style="margin:0">${z.pace ? `<span>${esc(z.pace)}</span>` : ""}${z.hf ? `<span>${ui("heart")}HF ${esc(z.hf)}</span>` : ""}</div></div></div>`;
+  const wy = E.whyOf(s), steps = Library.workoutSteps(s, z.pace ? z.pace.split(" /")[0] : ""), exs = Library.exercisesFor(s);
+  // Kennzahlen wie Garmin/Runna: Distanz, Dauer, Ziel, Intensität
+  const mainZ = (() => { if (!steps.length) return { T: 3, I: 4, HMZ: 3, MP: 2, LRM: 2, MD: 2, TEST: 4, M: 2, R3: 2, R4: 3 }[s.code] || 1; const w = {}; steps.forEach(x0 => { if (x0.z >= 5 && x0.dur < 5) return; w[x0.z] = (w[x0.z] || 0) + x0.dur * (x0.z > 1 ? 3 : 1); }); return +Object.keys(w).sort((a0, b0) => w[b0] - w[a0])[0] || 1; })();
+  x += `<div class="wkstats">${s.km ? `<div><span>Distanz</span><b>${esc(kmStr(s.km, s.sport))}</b></div>` : ""}${s.min ? `<div><span>Dauer</span><b>${esc(durStr(s.min))}</b></div>` : ""}${z.pace ? `<div class="wide"><span>Ziel</span><b>${esc(z.pace)}</b></div>` : ""}${z.hf ? `<div class="wide"><span>Puls</span><b>${esc(z.hf)}</b></div>` : ""}<div><span>Intensität</span><b class="zt z${mainZ}">${esc(Library.ZN[mainZ])}</b></div>${s.prio ? `<div><span>Priorität</span><b>${s.prio === "A" ? "Schlüssel" : s.prio === "B" ? "Wichtig" : "Optional"}</b></div>` : ""}</div>`;
   if (doneish) x += `<div class="grp" style="margin-bottom:12px"><div class="row plain"><span class="stmark ${st === "✓" ? "ok" : "half"}">${ui(st === "✓" ? "check" : "half")}</span><span class="tx"><span class="t1">${st === "✓" ? "Erledigt" : "Teilweise"}</span><span class="t2">${[durStr(a.min), a.km ? kmStr(a.km, s.sport) : "", a.km && s.sport === "Lauf" ? E.paceStr(a.min, a.km) + " /km" : "", num(l.hf) ? "Ø " + l.hf + " bpm" : "", num(l.rpe) ? "RPE " + l.rpe : ""].filter(Boolean).join(" · ")}</span></span><button class="btn sm" data-act="mode" data-v="log">Ändern</button></div></div>`;
   if (st === "✗") x += `<div class="grp" style="margin-bottom:12px"><div class="row plain"><span class="stmark miss">${ui("x")}</span><span class="tx"><span class="t1">Verpasst</span><span class="t2">${esc({ zeit: "Keine Zeit", muede: "Müde oder Schmerz", krank: "Krank", reise: "Reise" }[l.why] || "Grund offen")}</span></span><button class="btn sm" data-act="mode" data-v="miss">Ändern</button></div></div>`;
-  if (s.orig) x += `<div class="banner info">${ui("info")}<div class="tx">Angepasst. Ursprünglich ${esc(s.orig.name)}${s.orig.km ? ", " + de(s.orig.km) + " km" : s.orig.min ? ", " + s.orig.min + " min" : ""}.</div></div>`;
+  if (s.orig) x += `<div class="banner info">${ui("info")}<div class="tx">Angepasst. Ursprünglich ${esc(s.orig.name)}${s.orig.km ? ", " + de(s.orig.km) + " km" : s.orig.min ? ", " + s.orig.min + " min" : ""}.${s.note ? " " + esc(s.note) : ""}</div></div>`;
   if (s.movedFrom) x += `<div class="banner info">${ui("move")}<div class="tx">Verschoben von ${esc(U.wdD(s.movedFrom))}.</div></div>`;
   const spk = !s.dropped && E.lrSpike(c.Ex, s); if (spk) x += `<div class="banner">${ui("info")}<div class="tx">Geplanter Sprung: +${Math.round(spk.pct * 100)} % zum längsten Lauf der 30 Tage davor (${de(spk.ref)} km). Ab 10 % steigt laut Studie das Überlastungsrisiko.</div>${infoBtn("lrspike")}</div>`;
-  x += `<p style="font-size:1rem;line-height:1.5;color:var(--ink2);margin:4px 2px 10px">${esc(s.desc)}</p>${s.hint ? `<p class="note">${esc(s.hint)}</p>` : ""}${l.note ? `<p class="note">Notiz: ${esc(l.note)}</p>` : ""}`;
-  const wy = !s.isFree && E.whyOf(s);
-  if (wy) x += `<details class="why"><summary>${ui("book")}<span>Warum diese Einheit?</span><span class="ev ev${wy.ev}">${wy.ev}</span></summary><p><b>${esc(wy.t)}:</b> ${esc(wy.zweck)}</p><p><b>So dosieren:</b> ${esc(wy.dos)}</p>${wy.hint ? `<p>${esc(wy.hint)}</p>` : ""}<p class="note">Evidenz: ${esc(E.EV_LAB[wy.ev])}. Quellen: ${esc(wy.src.map(k => E.SRC[k]).join(" · "))}</p></details>`;
+  // Warum: sichtbar als Coach-Notiz, Quellen aufklappbar
+  if (wy) x += `<div class="coachnote"><div class="cn-h">${ui("book")}<b>${esc(wy.t)}: darum geht es</b><span class="ev ev${wy.ev}" title="${esc(E.EV_LAB[wy.ev])}">${wy.ev}</span></div><p>${esc(wy.zweck)}</p><p class="dos"><b>So läufst du richtig:</b> ${esc(wy.dos)}</p>${wy.hint ? `<p class="hint">${esc(wy.hint)}</p>` : ""}<details><summary>Evidenz und Quellen</summary><p class="note">${esc(E.EV_LAB[wy.ev])}.</p><ul class="srcl">${wy.src.map(k => `<li>${esc(E.SRC[k])}</li>`).join("")}</ul></details></div>`;
+  // Ablauf mit Intensitätsprofil
+  if (steps.length && ["Lauf", "Rad", "Schwimmen"].includes(s.sport)) {
+    const tot = steps.reduce((a0, x0) => a0 + x0.dur, 0) || 1;
+    x += `<div class="sec"><h2 style="font-size:1.0625rem">Ablauf</h2><span class="muted" style="font-size:.8125rem">${steps.length} ${steps.length === 1 ? "Abschnitt" : "Abschnitte"} · ca. ${Math.round(tot)} min</span></div>`;
+    if (steps.length > 1) x += `<div class="wprof" role="img" aria-label="Intensitätsprofil">${steps.map(x0 => `<i class="z${x0.z}" style="flex:${x0.dur};height:${18 + x0.z * 14}%" title="${esc(x0.lab)}"></i>`).join("")}</div>`;
+    const grp = []; steps.forEach(x0 => { const last = grp[grp.length - 1]; if (last && last.lab.replace(/^\d+\.\s*/, "") === x0.lab.replace(/^\d+\.\s*/, "") && /^\d+\./.test(x0.lab) && last.rep) { last.n++; return; } grp.push(Object.assign({}, x0, { n: 1, rep: /^\d+\./.test(x0.lab) })); });
+    const reps = steps.filter(x0 => /^\d+\./.test(x0.lab)), nRep = reps.length, recs = steps.filter(x0 => x0.lab === "Trabpause" || x0.lab === "Pause");
+    let rows = [];
+    if (nRep >= 2 && recs.length) { const w = steps.filter(x0 => !/^\d+\./.test(x0.lab) && !recs.includes(x0)); const first = steps.indexOf(reps[0]);
+      steps.slice(0, first).forEach(x0 => rows.push(x0)); rows.push({ lab: nRep + " × " + reps[0].lab.replace(/^\d+\.\s*/, ""), dur: reps[0].dur, z: reps[0].z, note: (reps[0].note ? reps[0].note + " · " : "") + "Pause " + recs[0].note + " " + (recs[0].lab === "Pause" ? "locker" : "traben"), block: true });
+      steps.slice(steps.indexOf(reps[nRep - 1]) + 1).forEach(x0 => rows.push(x0)); }
+    else rows = steps;
+    x += `<div class="grp steps">${rows.map((x0, i0) => `<div class="row plain step"><span class="sn z${x0.z}">${i0 + 1}</span><span class="tx"><span class="t1">${esc(x0.lab)}</span><span class="t2" style="white-space:normal">${esc([Library.ZN[x0.z], x0.note].filter(Boolean).join(" · "))}</span></span><span class="rv">${x0.block ? "je " : ""}${x0.dur >= 1 ? Math.round(x0.dur) + "'" : Math.round(x0.dur * 60) + " s"}</span></div>`).join("")}</div>`;
+    x += `<p class="note">Ablauf aus der Planbeschreibung abgeleitet, Dauer geschätzt. Original: ${esc(s.desc)}</p>`;
+  } else if (!exs.length) x += `<p style="font-size:1rem;line-height:1.5;color:var(--ink2);margin:4px 2px 10px">${esc(s.desc)}</p>`;
+  // Übungen mit Anleitung und Video
+  if (exs.length) {
+    x += `<div class="sec"><h2 style="font-size:1.0625rem">${s.sport === "Schwimmen" ? "Drills und Technik" : s.sport === "Lauf" ? "Technik" : "Übungen"}</h2><span class="muted" style="font-size:.8125rem">antippen für Anleitung</span></div><div class="grp">`;
+    exs.forEach(k => { const e0 = Library.exercise(k), dz = Library.doseFor(s.desc, k);
+      x += `<details class="exc"><summary><span class="badge-ic" style="--c:${S.c};--t:${S.t}">${icon(s.sport === "Mobility" ? "Mobility" : s.sport)}</span><span class="tx"><span class="t1">${esc(e0.n)}</span><span class="t2">${esc([dz, e0.k].filter(Boolean).join(" · "))}</span></span>${ui("chev", "chev")}</summary>
+        <div class="exb"><ol>${e0.how.map(h => `<li>${esc(h)}</li>`).join("")}</ol>
+        <div class="excols"><div><b>Darauf achten</b><ul>${e0.cue.map(h => `<li>${esc(h)}</li>`).join("")}</ul></div><div><b>Typische Fehler</b><ul>${e0.err.map(h => `<li>${esc(h)}</li>`).join("")}</ul></div></div>
+        <p class="exwhy">${esc(e0.why)}${e0.alt ? " <b>Leichter oder ohne Gerät:</b> " + esc(e0.alt) + "." : ""}</p>
+        <a class="btn sm lane vid" href="${esc(e0.video)}" target="_blank" rel="noopener noreferrer">${ui("play")}Video ansehen</a></div></details>`; });
+    x += `</div>${!["Lauf", "Rad", "Schwimmen"].includes(s.sport) || !steps.length ? `<p class="note"><b>Plan:</b> ${esc(s.desc)}</p>` : ""}<p class="note">Videos öffnen eine YouTube-Suche zur Übung. So bleibt der Link aktuell, und die App lädt nichts von YouTube, solange du nicht tippst.</p>`;
+  }
+  if (s.hint) x += `<p class="note">${esc(s.hint)}</p>`;
+  if (l.note) x += `<p class="note">Notiz: ${esc(l.note)}</p>`;
   // Aktionen
   const can = !s.dropped && s.date <= t && E.isTrain(s) && st !== "krank";
   if (can && !doneish && st !== "✗") x += `<div class="quick" style="margin-top:16px"><button class="btn pri" data-act="mode" data-v="log">${ui("check")}Erledigt</button><button class="btn" data-act="mode" data-v="miss">${ui("x")}Verpasst</button></div>`;
@@ -568,9 +619,21 @@ function vDay(c) {
   const rest = !it.length || it.every(s => s.sport === "Ruhe");
   if (rest) return x + `<div class="grp"><div class="empty"><b>Ruhetag</b>${esc((it[0] && it[0].desc) || "Erholung ist Training.")}</div></div>`;
   it.filter(s => s.sport !== "Ruhe").forEach(s => { const z = zoneOf(s, c), S = sp(s.sport);
-    x += `<div class="card"><div class="ch"><div style="display:flex;gap:12px;align-items:center"><span class="badge-ic" style="--c:${S.c};--t:${S.t}">${icon(s.sport)}</span><div><h3>${esc(s.name.replace(/^★\s*/, ""))}${tags(s)}</h3><p>${esc(s.time || S.lab)}${s.wake ? " · Wecker " + esc(s.wake) : ""}</p></div></div>${s.sport !== "Ruhe" && !s.isFree ? stmark(s, c.t) : ""}</div>
+    x += `<div class="card tap" role="button" tabindex="0" data-act="sess" data-id="${esc(s.id)}" aria-label="${esc(s.name)} öffnen"><div class="ch"><div style="display:flex;gap:12px;align-items:center"><span class="badge-ic" style="--c:${S.c};--t:${S.t}">${icon(s.sport)}</span><div><h3>${esc(s.name.replace(/^★\s*/, ""))}${tags(s)}</h3><p>${esc(s.time || S.lab)}${s.wake ? " · Wecker " + esc(s.wake) : ""}</p></div></div>${s.sport !== "Ruhe" && !s.isFree ? stmark(s, c.t) : ""}</div>
       <div class="planned" style="margin:8px 0">${s.km ? `<span><b>${esc(kmStr(s.km, s.sport))}</b></span>` : ""}${s.min ? `<span><b>${esc(durStr(s.min))}</b></span>` : ""}${z.pace ? `<span>${esc(z.pace)}</span>` : ""}${z.hf ? `<span>HF <b>${esc(z.hf)}</b></span>` : ""}</div>
-      <p style="color:var(--ink2);line-height:1.5">${esc(s.desc || "")}</p><div style="margin-top:12px"><button class="btn sm" data-act="sess" data-id="${esc(s.id)}">Öffnen</button></div></div>`; });
+      <p style="color:var(--ink2);line-height:1.5">${esc(s.desc || "")}</p><div class="more">Details, Ablauf und Übungen ${ui("chev")}</div></div>`; });
+  return x;
+}
+
+/* Tagesblatt (aus Monat und Saison): alle Einheiten des Tages antippbar, Wochen-Sprung, Ernährung */
+function daySheet(D) {
+  const c = C(), d = D.d, it = dayItems(c, d).filter(s => s.sport !== "Ruhe"), ph = (B.weeks[E.weekOf(B, d)] || {}).phase || "";
+  const rest = dayItems(c, d).find(s => s.sport === "Ruhe");
+  let x = `<div class="sh-head"><div class="tx"><h2 class="sheet-title" tabindex="-1">${esc(longDate(d))}</h2><p>Woche ${E.weekOf(B, d)}${ph ? " · " + esc(ph.replace(/\s*\(E\)\s*$/, "")) : ""}</p></div><button class="closebtn" data-act="close" aria-label="Schließen">${ui("x")}</button></div>`;
+  x += `<div class="dnav"><button class="iconbtn" data-act="dsh" data-v="${d - 1}" aria-label="Vortag">${ui("back")}</button><span>${esc(dayLabel(d, c.t))}</span><button class="iconbtn" data-act="dsh" data-v="${d + 1}" aria-label="Nächster Tag">${ui("chev")}</button></div>`;
+  x += it.length ? `<div class="grp">${it.map(s => sessRow(s, c, { noSwipe: true })).join("")}</div>` : `<div class="grp"><div class="row plain"><span class="badge-ic" style="--c:var(--rest);--t:var(--rest-t)">${icon("Ruhe")}</span><span class="tx"><span class="t1">Ruhetag</span><span class="t2" style="white-space:normal">${esc((rest && rest.desc) || "Erholung ist Training.")}</span></span></div></div>`;
+  if (KG()) { const N = E.dayNeeds(E.dayType(c.Ex, ST, d), KG()); x += `<div class="grp" style="margin-top:12px"><button class="row" data-act="nut" data-v="${d}"><span class="badge-ic" style="--c:var(--ok);--t:var(--ok-t)">${ui("fork")}</span><span class="tx"><span class="t1">${esc(N.lab)}: ${N.khT} g KH · ${N.pT} g Eiweiß</span><span class="t2">Beispielmahlzeiten</span></span>${ui("chev", "chev")}</button></div>`; }
+  x += `<div class="sh-foot"><button class="btn" data-act="mday2w" data-v="${d}">Woche ${E.weekOf(B, d)} öffnen</button><button class="btn ink" data-act="close">Fertig</button></div>`;
   return x;
 }
 function vMonth(c) {
@@ -578,7 +641,7 @@ function vMonth(c) {
   const y = Math.floor(base / 12), m = base % 12, first = U.serialOf(new Date(y, m, 1, 12)), days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
   const lead = (U.sd(first).getUTCDay() + 6) % 7, start = first - lead, cells = Math.ceil((lead + days) / 7) * 7;
   const trv = Object.keys(ST).filter(k => k.startsWith("trv:")).map(k => ST[k].v).filter(v => v && !v.del), sk = get("sick");
-  let x = `<div class="wkhead"><button class="iconbtn" data-act="mon" data-v="${base - 1}" aria-label="Vormonat">${ui("back")}</button><div class="mid"><b>${MON[m]} ${y}</b><span>Antippen öffnet die Woche</span></div><button class="iconbtn" data-act="mon" data-v="${base + 1}" aria-label="Nächster Monat">${ui("chev")}</button></div>`;
+  let x = `<div class="wkhead"><button class="iconbtn" data-act="mon" data-v="${base - 1}" aria-label="Vormonat">${ui("back")}</button><div class="mid"><b>${MON[m]} ${y}</b><span>Tag antippen für Details</span></div><button class="iconbtn" data-act="mon" data-v="${base + 1}" aria-label="Nächster Monat">${ui("chev")}</button></div>`;
   x += `<div class="month"><div class="mh">${["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map(d => `<span>${d}</span>`).join("")}</div><div class="mg">`;
   for (let i = 0; i < cells; i++) { const d = start + i, it = dayItems(c, d), out = U.sd(d).getUTCMonth() !== m, race = it.some(s => s.test === "race"), tv = trv.some(v => d >= v.from && d <= v.to), sick = sk && num(sk.from) && d >= sk.from && d <= (num(sk.to) ? sk.to : c.t);
     x += `<button class="md${out ? " out" : ""}${d === c.t ? " today" : ""}${race ? " race" : tv ? " trv" : sick ? " sick" : ""}" data-act="mday" data-v="${d}" aria-label="${esc(longDate(d))}"><b>${U.sd(d).getUTCDate()}</b><span class="dots">${weekDots(c, d)}</span></button>`; }
@@ -745,6 +808,12 @@ function perfBlock(c) {
 /* ---------- v3.0 KI-Coach (optional, Standard aus) ---------- */
 const AION = () => get("set:ai") === true;
 function aiSheet(D) {
+  if (!AION()) return `<div class="sh-head"><span class="badge-ic" style="--c:var(--lane);--t:var(--lane-t)">${ui("sync")}</span><div class="tx"><h2 class="sheet-title" tabindex="-1">KI-Coach</h2><p>Zweite Meinung zu deinem Plan</p></div>${infoBtn("ai")}<button class="closebtn" data-act="close" aria-label="Schließen">${ui("x")}</button></div>
+    <div class="grp"><div class="row plain"><span class="badge-ic" style="--c:var(--ok);--t:var(--ok-t)">${ui("check")}</span><span class="tx"><span class="t1">Was er macht</span><span class="t2" style="white-space:normal">Prüft deine letzten 21 Tage und die nächsten 14 Tage und schlägt Änderungen vor, etwa bei Ermüdung, vielen kleinen Ausfällen oder nach Reisen. Du bestätigst jede Änderung.</span></span></div>
+    <div class="row plain"><span class="badge-ic" style="--c:var(--lane);--t:var(--lane-t)">${ui("shield")}</span><span class="tx"><span class="t1">Was er sieht</span><span class="t2" style="white-space:normal">Plan, Dauer, Distanz, Puls, RPE, Form und Abwesenheitstage ohne Grund. Nicht: Krankheitsart, Hotel, Gewicht, Notizen, Schmerz.</span></span></div>
+    <div class="row plain"><span class="badge-ic" style="--c:var(--gold-s);--t:var(--gold)">${ui("info")}</span><span class="tx"><span class="t1">Zwei Wege</span><span class="t2" style="white-space:normal">Kostenlos über Claude im Chat (kopieren und einfügen) oder direkt mit eigenem Anthropic-API-Schlüssel (wenige Cent pro Anfrage).</span></span></div></div>
+    <p class="note">Die festen Regeln der App passen den Plan schon automatisch an. Der KI-Coach ist eine Ergänzung.</p>
+    <div class="sh-foot"><button class="btn" data-act="close">Später</button><button class="btn pri" data-act="aion">${ui("check")}Einschalten</button></div>`;
   const c = C(), pk = D.pk || (D.pk = E.aiPacket(B, ST, c.t, c.Ex)), key = PREF.aikey || "", model = PREF.aimodel || "claude-opus-5-5";
   let x = `<div class="sh-head"><span class="badge-ic" style="--c:var(--lane);--t:var(--lane-t)">${ui("sync")}</span><div class="tx"><h2 class="sheet-title" tabindex="-1">KI-Coach</h2><p>Prüft die nächsten 14 Tage. Du bestätigst jede Änderung.</p></div>${infoBtn("ai")}<button class="closebtn" data-act="close" aria-label="Schließen">${ui("x")}</button></div>`;
   if (D.res) { const r = D.res;
@@ -962,7 +1031,7 @@ function doRender() {
   const nx = B.S.events.filter(e => e.date >= c.t).sort((a, b) => a.date - b.date)[0];
   const side = `<aside class="side" aria-label="Navigation"><div class="brand"><img src="icon-192.png" alt="">Performance Lab</div><nav>${TABS.map(([k, l, ic]) => `<button data-tab="${k}" aria-current="${tab === k ? "page" : "false"}">${ui(ic)}${l}${k === "heute" && n ? `<span class="dot">${n}</span>` : ""}</button>`).join("")}</nav>
     <button class="btn pri sm addbtn" data-act="free">${ui("plus")}Training hinzufügen</button><div class="foot">${nx ? `<div class="cdmini"><b class="num">${nx.date - c.t}</b><span>Tage bis ${esc(nx.name)}</span></div>` : ""}${syncPill()}</div></aside>`;
-  const insp = wide ? `<aside class="insp" id="insp" aria-label="Details">${selId && findS(selId) ? sessView(selId, INSP) : `<div class="empty"><b>Einheit wählen</b>Details, Eintragen und Verschieben erscheinen hier.</div>`}</aside>` : "";
+  const insp = wide ? `<aside class="insp" id="insp" aria-label="Details">${(() => { if (!(selId && findS(selId))) { const h = heroPick(c); if (h) { selId = h.s.id; INSP = { mode: "" }; } } return selId && findS(selId) ? sessView(selId, INSP) : `<div class="empty"><b>Einheit wählen</b>Details, Eintragen und Verschieben erscheinen hier.</div>`; })()}</aside>` : "";
   const sc = window.scrollY;
   root.innerHTML = `<div class="shell${wide ? "" : ""}">${side}<main class="content" id="main">${body}</main>${insp}</div>
    <div class="tabbar"><nav class="tabs" aria-label="Tabs">${TABS.map(([k, l, ic]) => `<button data-tab="${k}" aria-current="${tab === k ? "page" : "false"}" aria-label="${l}${k === "heute" && n ? ", " + n + " offen" : ""}">${ui(ic)}<span>${l}</span>${k === "heute" && n ? `<span class="dot">${n}</span>` : ""}</button>`).join("")}</nav><button class="fab" data-act="free" aria-label="Training hinzufügen">${ui("plus")}</button></div>`;
@@ -1111,6 +1180,7 @@ document.addEventListener("click", async e => {
     case "setk": { const f = cf(); if (!f || !f.D.f) break; const F = f.D.f, k = b.dataset.f; F[k] = F[k] === v && k === "region" ? "" : v; if (k === "cat") { F.flags = []; if (v !== "verletzung") F.region = ""; } buzz(4); f.re(); break; }
     case "tog": { const f = cf(); if (!f || !f.D.f) break; const F = f.D.f, k = b.dataset.f; if (k === "eq") F.eq[v] = !F.eq[v]; else { const L = F[k] || (F[k] = []); const i = L.indexOf(v); if (i >= 0) L.splice(i, 1); else L.push(v); } buzz(4); f.re(); break; }
     case "aitog": set("set:ai", !AION()); toast(AION() ? "KI-Coach an. Daten gehen nur auf Knopfdruck raus." : "KI-Coach aus.", { icon: "sync" }); break;
+    case "aion": { put("set:ai", true); const S = SHEETS[SHEETS.length - 1]; if (S) rerenderSheet(S); render(); break; }
     case "ai": openSheet(S => aiSheet(S.data), { label: "KI-Coach", data: {} }); break;
     case "aikey": openSheet(S => aiKeySheet(S.data), { label: "API-Schlüssel", data: {} }); break;
     case "aikeysave": { const S = SHEETS[SHEETS.length - 1], F = S.data.f; PREF.aikey = String(F.aikey || "").trim(); PREF.aimodel = String(F.aimodel || "").trim() || "claude-opus-5-5"; await idbPut("pref", PREF); closeSheet(S, true); render(); toast("Gespeichert, nur auf diesem Gerät.", { icon: "shield" }); break; }
@@ -1144,7 +1214,9 @@ document.addEventListener("click", async e => {
     case "day": planZoom = "tag"; planDay = +v; window.scrollTo(0, 0); render(); break;
     case "dayn": planDay = +v; render(); break;
     case "mon": planMonth = +v; render(); break;
-    case "mday": planZoom = "woche"; planWeek = Math.max(1, Math.min(C().NW, E.weekOf(B, +v))); render(); break;
+    case "mday": openSheet(S => daySheet(S.data), { label: "Tag", data: { d: +v }, live: true }); break;
+    case "dsh": { const S = SHEETS[SHEETS.length - 1]; if (S) { S.data.d = +v; rerenderSheet(S); } break; }
+    case "mday2w": { closeSheet(SHEETS[SHEETS.length - 1], true); planZoom = "woche"; planWeek = Math.max(1, Math.min(C().NW, E.weekOf(B, +v))); render(); break; }
     case "range": progRange = v; render(); break;
     case "theme": PREF.theme = v; idbPut("pref", PREF); render(); break;
     case "alertx": ALERT = ""; render(); break;

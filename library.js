@@ -1,9 +1,12 @@
-/* Performance Lab 3.1: Übungsbibliothek und Workout-Parser. Reine Daten und Funktionen ohne DOM.
+/* Performance Lab 3.2: Übungsbibliothek und Workout-Parser. Reine Daten und Funktionen ohne DOM.
    Video-Links führen auf eine YouTube-Suche (immer aktuell, kein toter Einzellink). Keine Einbettung: kein Datenabfluss beim Öffnen der App. */
 (function (G) {
 "use strict";
 const yt = q => "https://www.youtube.com/results?search_query=" + encodeURIComponent(q);
 
+
+/* Geprüfte Technikvideos (YouTube-oEmbed bestätigt am 12.10.2026). Einbettung über youtube-nocookie erst nach Tippen. */
+const VIDEOS = {"seitlage":{"id":"1VQVfo0icr0","t":"How to swim a Side-Kick Drill","c":"FORM"},"sechseins":{"id":"ShRT_dQxgEs","t":"6/1/6 Drill","c":"TriDot"},"abschlag":{"id":"SVbjlTRSkxY","t":"Beginner Swim Drill: Catch-Up","c":"MySwimPro"},"fingertip":{"id":"O_muRVVNpaQ","t":"Finger-Tip Drag Drill","c":"TriDot"},"einarmig":{"id":"S0ruyow45WE","t":"Single Arm Drill","c":"Effortless Swimming"},"pullbuoy":{"id":"ITK0chbKegI","t":"How To Swim With A Pull Buoy","c":"Global Triathlon Network"},"dreieratmung":{"id":"IeUUuAyVu9s","t":"How To Breathe On Both Sides","c":"Global Triathlon Network"},"csstest":{"id":"75PaBO4cxEk","t":"The CSS Swim Test Explained","c":"MyProCoach"},"css":{"id":"wooLaOhLg6U","t":"What Is Critical Swim Speed?","c":"Global Triathlon Network"},"sighting":{"id":"w7iIf192S4w","t":"How To Sight Whilst Open Water Swimming","c":"Global Triathlon Network"},"neo":{"id":"KXE7S9ub4jI","t":"How To Put On A Wetsuit","c":"Global Triathlon Network"},"kraul":{"id":"AQy_c30lNjI","t":"How To Swim Freestyle","c":"Global Triathlon Network"},"kniebeuge":{"id":"7v_V6xiA_AA","t":"How to Perform A Back Squat","c":"Squat University"},"rdl":{"id":"_oyxCn2iSjU","t":"How To Do Romanian Deadlifts","c":"Jeff Nippard"},"split":{"id":"hPlKPjohFS0","t":"The Perfect Bulgarian Split Squat","c":"Squat University"},"waden":{"id":"e547vdG9BFA","t":"3 Exercises to Strengthen the Soleus","c":"Rehab Science"},"exzentr":{"id":"fHHbn_Odk4E","t":"Alfredson Achilles Protocol","c":"Physiotutors"},"rudern":{"id":"djKXLt7kv7Q","t":"How To Do Dumbbell Rows","c":"Jeff Nippard"},"plank":{"id":"A2b2EmIg0dA","t":"How To Plank","c":"E3 Rehab"},"sideplank":{"id":"44ND4bOB-T0","t":"How to do a Side Plank","c":"NASM"},"copenhagen":{"id":"YRRnnZsRs9U","t":"Copenhagen Planks","c":"E3 Rehab"},"deadbug":{"id":"GbSC02oU3To","t":"How to Do a Dead Bug","c":"Hinge Health"},"bridge":{"id":"b1zTCyGJXCQ","t":"Single Leg Glute Bridge","c":"Dr. Carl Baird"},"liegestuetz":{"id":"GX87fbBd78A","t":"Perfect Push Ups","c":"E3 Rehab"},"pogo":{"id":"j0nl5dWuqN4","t":"Pogo Jumps Tutorial","c":"Runna"},"boxjump":{"id":"kNIInK_Le8I","t":"Beginner Box Jump","c":"NASM"},"shortfoot":{"id":"mRC_3U2XBP0","t":"Short Foot Exercise","c":"Dr Emily Splichal"},"zehenyoga":{"id":"QVZpBSVV9js","t":"Toe Yoga Exercise","c":"Hinge Health"},"hallux":{"id":"It6vngBeRFg","t":"Big Toe Mobility Exercises","c":"Rehab Science"},"hueftmob":{"id":"t4Zz6-aG8Iw","t":"90 90 Hip Stretch","c":"Jack Hanrahan Fitness"},"wademob":{"id":"YH7xjrkq7ic","t":"Ankle Mobility: Knee to Wall","c":"The Basketball Doctors"},"steigerung":{"id":"1i2ZPpXtuOk","t":"How To Run Strides","c":"The Run Experience"},"huegelsprint":{"id":"t62tRpLCBaA","t":"8 Second Hill Sprints","c":"Run Elite"},"lauftechnik":{"id":"_kGESn8ArrU","t":"How To Run Properly","c":"Global Triathlon Network"},"lauf_abc":{"id":"HvH5WZk0f90","t":"Lauf-ABC Part I","c":"Training & Testing"},"trittfrequenz":{"id":"QLe3mvC_SXs","t":"Improve Your High Cadence Cycling","c":"Global Cycling Network"},"einbeinig_rad":{"id":"VYQNApn-_v4","t":"Single-Leg Drill","c":"TriDot"},"rad_berg":{"id":"4zvP4DQgwQE","t":"Riding Seated Vs Standing Uphill","c":"Global Cycling Network"},"koppel":{"id":"F7WE0SARL4E","t":"Brick Workout 101","c":"Global Triathlon Network"},"wechsel":{"id":"KkUjNZnTaUQ","t":"How To Do A Triathlon Transition","c":"Global Triathlon Network"}};
 /* k: Kategorie, how: Ausführung (Schritte), cue: worauf achten, err: typische Fehler, why: Nutzen für dich, alt: leichter/ohne Gerät, q: Videosuche */
 const EX = {
   kniebeuge: { n: "Kniebeuge (Back Squat)", k: "Kraft", re: /kniebeuge|squat(?!.*split)/i,
@@ -77,6 +80,11 @@ const EX = {
     how: ["Alle 6–8 Züge kurz nach vorn schauen: Augen knapp über die Wasserlinie (Krokodilaugen).", "Direkt danach zur Seite drehen und atmen.", "Ziel: Boje oder markanter Punkt an Land."], cue: ["Kopf nur kurz heben", "Rhythmus halten"], err: ["Kopf zu hoch, Beine sinken"], why: "Gerade Linie spart im Rennen leicht 100–200 m.", alt: "Im Becken auf eine Flasche am Beckenrand üben", q: "sighting freiwasser schwimmen technik" },
   neo: { n: "Schwimmen im Neopren", k: "Freiwasser", re: /\bneo\b/i,
     how: ["Neo sorgfältig hochziehen, besonders an Schultern, damit die Arme frei sind.", "Ruhig ins Wasser gehen, Gesicht eintauchen, ausatmen.", "Erste Minuten bewusst ruhig, der Neo engt anfangs ein."], cue: ["Nie allein", "Schwimmboje"], err: ["Zu schnell starten, Atemnot"], why: "Mehr Auftrieb und Wärme. Gewöhnung vor dem Rennen ist Pflicht.", alt: "", q: "neoprenanzug anziehen triathlon tipps" },
+  kraul: { n: "Kraul-Technik (Überblick)", k: "Schwimmen", re: /(?!)/, how: ["Lang machen: Hand taucht vor der Schulter ein und gleitet nach vorn.", "Hoher Ellbogen unter Wasser, Hand zieht unter dem Körper zur Hüfte.", "Rotation aus der Hüfte, Kopf ruhig, ein Auge bleibt beim Atmen im Wasser.", "Beinschlag klein aus der Hüfte."], cue: ["Ausatmen unter Wasser", "Hüfte oben"], err: ["Kopf heben", "Arm kreuzt die Mittellinie"], why: "Saubere Technik spart im Rennen mehr Zeit als Kraft.", alt: "", q: "kraul technik" },
+  lauf_abc: { n: "Lauf-ABC", k: "Lauf", re: /lauf-abc|lauf abc/i, how: ["Fußgelenksarbeit: kleine, schnelle Schritte über den Vorfuß, 20 m.", "Skippings: Knie halbhoch, hohe Frequenz, 20 m.", "Anfersen: Ferse locker Richtung Gesäß, 20 m.", "Hopserlauf: rhythmisch mit Armeinsatz, 20 m. Je 2 Durchgänge."], cue: ["Aufrecht", "Aktiver Armeinsatz"], err: ["Rückenlage"], why: "Koordination und Laufökonomie, ideal vor Steigerungen.", alt: "", q: "lauf abc übungen" },
+  koppel: { n: "Koppellauf (Rad → Lauf)", k: "Triathlon", re: /(?!)/, how: ["Schuhe und Startnummernband vorher bereitlegen.", "Rad abstellen, Helm erst nach dem Rad ab, Laufschuhe an.", "Erste Minuten bewusst kurze, schnelle Schritte.", "Nach 5–10' ins Zieltempo finden."], cue: ["Schrittfrequenz hoch", "Erste Minuten nicht nach Pace laufen"], err: ["Zu schnell loslaufen"], why: "Gewöhnt Beine und Kreislauf an den Wechsel.", alt: "", q: "koppeltraining triathlon" },
+  trittfrequenz: { n: "Hohe Trittfrequenz", k: "Rad", re: /(?!)/, how: ["Leichten Gang wählen.", "Trittfrequenz über 30 s auf 110+ U/min steigern.", "Becken ruhig, Oberkörper locker."], cue: ["Nicht hüpfen"], err: ["Zu schwerer Gang"], why: "Runder, ökonomischer Tritt.", alt: "", q: "trittfrequenz training" },
+  rad_berg: { n: "Bergauf im Sattel", k: "Rad", re: /(?!)/, how: ["Rechtzeitig schalten, bevor die Frequenz einbricht.", "Im Sattel, Oberkörper ruhig, Hände locker.", "Gleichmäßiger Druck über die ganze Kurbelumdrehung."], cue: ["HF-Obergrenze halten"], err: ["Am Anfang überziehen"], why: "Allgäu: Kalvarienberg und Anstiege kontrolliert fahren.", alt: "", q: "bergauf radfahren technik" },
   /* Lauf-Drills */
   steigerung: { n: "Steigerungen", k: "Lauf", re: /steigerung/i,
     how: ["Nach dem lockeren Lauf 15–20 Sekunden zügig beschleunigen.", "Bis etwa 5-km-Tempo, nicht sprinten.", "Komplett erholen (gehen oder traben), dann die nächste."], cue: ["Locker bleiben", "Hohe Schrittfrequenz"], err: ["Verkrampfen", "Zu schnell"], why: "Hält Laufökonomie und Schnelligkeit, ohne zu ermüden.", alt: "", q: "steigerungsläufe strides erklärt" },
@@ -92,7 +100,7 @@ function exercisesIn(text) {
   Object.keys(HOTEL).forEach(h => { const m = t.match(new RegExp("\\b" + h + "\\b")); if (m) HOTEL[h].forEach((k, i) => hits.push([m.index + i * .01, k])); });
   const seen = new Set(); return hits.sort((a, b) => a[0] - b[0]).map(h => h[1]).filter(k => !seen.has(k) && seen.add(k));
 }
-function exercise(k) { const e = EX[k]; return e ? Object.assign({ key: k, video: yt(e.q) }, e) : null; }
+function exercise(k) { const e = EX[k]; if (!e) return null; const v = VIDEOS[k]; return Object.assign({ key: k, video: v ? "https://www.youtube.com/watch?v=" + v.id : yt(e.q), vid: v || null }, e); }
 /* Sätze/Wiederholungen zu einer Übung aus dem Text (z. B. "Kniebeuge 4x5", "je 3x10–12 @ RPE 6–7"). */
 function doseFor(text, k) {
   const t = String(text || ""), e = EX[k]; if (!e) return "";
@@ -102,67 +110,190 @@ function doseFor(text, k) {
   const je = t.match(/je\s+(\d+\s*x\s*\d+(?:[–-]\d+)?(?:\s*@\s*RPE\s*\d+(?:[–-]\d+)?)?)/i); return je ? je[1] : "";
 }
 
-/* ---------- Workout-Parser: Beschreibung → Schritte mit Intensität (für Profil und Ablauf) ----------
-   z: 1 locker, 2 Ausdauer/MP/MD, 3 Schwelle, 4 Intervall, 5 Sprint. dur in Minuten (geschätzt aus Pace, wenn nur km). */
+/* ---------- Workout-Builder 3.2: Beschreibung → Abschnitte mit expliziten Anweisungen ----------
+   zf(code) liefert die Zone der Woche aus der Engine: { pace: "4:08–4:13 /km", hf: "169–176" }. css: Sekunden pro 100 m oder null.
+   Abschnitt: { kind, lab, n, dist (km), dur (min), z, target, hf, cad, rest {dur, how}, how, ex } */
 const ZN = { 1: "Locker", 2: "Ausdauer", 3: "Schwelle", 4: "Intervall", 5: "Sprint" };
-function paceOf(code) { return { E: 5.7, LR: 5.75, LRM: 5.6, MP: 4.5, T: 4.3, I: 4.1, HMZ: 4.27, MD: 4.9, AC: 5.6, TEST: 4.3 }[code] || 5.5; }
-function workoutSteps(s, zoneTxt) {
-  const d = String(s.desc || ""), code = s.code, steps = [], P = { e: 5.7, mp: 4.5, t: 4.25, i: 4.05, hm: 4.27, md: 4.9 };
-  const push = (lab, dur, z, note) => { if (dur > 0) steps.push({ lab, dur: Math.round(dur * 10) / 10, z, note: note || "" }); };
-  const kmToMin = (km, p) => km * p, dist = x => { const m = String(x).match(/(\d+(?:[.,]\d+)?)\s*(km|m)\b/); return m ? (m[2] === "km" ? +m[1].replace(",", ".") : +m[1] / 1000) : null; };
-  if (s.sport === "Lauf") {
-    let m;
-    const total = (d.match(/^(\d+(?:[.,]\d+)?)\s*km/) || [])[1];
-    const warm = d.match(/(\d+(?:[.,]\d+)?)\s*km ein/);
-    if (/@\s*Marathontempo/i.test(d)) { /* zuerst: Long Run mit MP-Blöcken, unten */ }
-    else if ((m = d.match(/(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*(km|m)\s*@\s*([A-Za-zä]+)[^/]*\/\s*(\d+(?:[.,]\d+)?)\s*(s|'|m|km)?\s*(traben|gehen)?/i))) {
-      const n = +m[1], km = m[3] === "km" ? +m[2].replace(",", ".") : +m[2] / 1000, kind = m[4].toLowerCase(), p = /schwell/.test(kind) ? P.t : /marathon/.test(kind) ? P.mp : /intervall/.test(kind) ? P.i : P.t, z = /schwell/.test(kind) ? 3 : /marathon/.test(kind) ? 2 : 4;
-      const rec = m[6] === "s" ? +m[5] / 60 : m[6] === "m" ? +m[5] / 1000 * 6.5 : m[6] === "km" ? +m[5].replace(",", ".") * P.e : +m[5];
-      push("Einlaufen", warm ? kmToMin(+warm[1].replace(",", "."), P.e) : 12, 1, warm ? warm[1] + " km locker" : "locker");
-      if (/steigerung/i.test(d.slice(0, m.index))) push("Steigerungen", 2, 5, "3–4 x 20 s");
-      for (let i = 0; i < n; i++) { push((i + 1) + ". " + (km >= 1 ? km + " km" : Math.round(km * 1000) + " m"), kmToMin(km, p), z, zoneTxt || ""); if (i < n - 1) push("Trabpause", rec, 1, m[5] + (m[6] || "'")); }
-      const used = steps.reduce((a, x) => a + x.dur, 0), tot = total ? kmToMin(+total.replace(",", "."), 5.2) : used + 10; push("Auslaufen", Math.max(8, tot - used), 1, "locker");
-    } else if ((m = d.match(/(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*(['′]|min|s)\s*(?:@\s*([A-Za-zä]+))?[^/]*\/\s*(\d+(?:[.,]\d+)?)\s*(['′]|s|min)?/i))) {
-      const n = +m[1], dur = m[3] === "s" ? +m[2] / 60 : +m[2], kind = (m[4] || (/zügig/.test(d) ? "zügig" : "")).toLowerCase(), z = /schwell/.test(kind) ? 3 : /marathon/.test(kind) ? 2 : dur <= 1.5 ? 4 : /zügig/.test(kind) ? 3 : 4, rec = m[6] === "s" ? +m[5] / 60 : +m[5];
-      push("Einlaufen", warm ? kmToMin(+warm[1].replace(",", "."), P.e) : 12, 1, warm ? warm[1] + " km locker" : "locker");
-      const hs = d.match(/(\d+)\s*x\s*10\s*s\s*hügelsprint/i); if (hs) push("Hügelsprints", +hs[1] * 2.2, 5, hs[1] + " x 10 s, 2' Pause");
-      for (let i = 0; i < n; i++) { push((i + 1) + ". " + m[2] + (m[3] === "s" ? " s" : "'"), dur, z, zoneTxt || ""); if (i < n - 1) push("Trabpause", rec, 1, m[5] + (m[6] || "'")); }
-      const used = steps.reduce((a, x) => a + x.dur, 0), tot = total ? kmToMin(+total.replace(",", "."), 5.3) : (s.min || used + 10); push("Auslaufen", Math.max(6, tot - used), 1, "locker");
-    }
-    if (!steps.length && /@\s*Marathontempo/i.test(d)) {
-      const parts = d.split(/,|\./).map(x => x.trim()).filter(x => /\d/.test(x) && /km/.test(x));
-      parts.forEach(pt => { let mm;
-        if ((mm = pt.match(/(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*km\s*@\s*Marathontempo\s*\/\s*(\d+(?:[.,]\d+)?)\s*km/i))) { for (let i = 0; i < +mm[1]; i++) { push((i + 1) + ". " + mm[2] + " km MP", kmToMin(+mm[2].replace(",", "."), P.mp), 2, "Marathontempo"); if (i < +mm[1] - 1) push(mm[3] + " km locker", kmToMin(+mm[3].replace(",", "."), P.e), 1, ""); } }
-        else if ((mm = pt.match(/(?:letzte\s+)?(\d+(?:[.,]\d+)?)\s*km\s*@\s*Marathontempo/i))) push(mm[1] + " km Marathontempo (MP)", kmToMin(+mm[1].replace(",", "."), P.mp), 2, "Marathontempo");
-        else if ((mm = pt.match(/^(?:\d+\s*km:\s*)?(\d+(?:[.,]\d+)?)\s*km\s*locker/i))) push(mm[1] + " km locker", kmToMin(+mm[1].replace(",", "."), P.e), 1, "");
-      });
-    }
-    if (!steps.length) {
-      const strides = d.match(/(\d+)\s*x\s*20\s*s\s*steigerung/i), z = { E: 1, LR: 1, AC: 2, MD: 2, MP: 2, HMZ: 3, TEST: 4, M: 2, T: 3, I: 4 }[code] || 1, main = (s.min || 30) - (strides ? 4 : 0);
-      if (["TEST", "HMZ", "M"].includes(code)) { push("Einlaufen", 15, 1, "locker + Steigerungen"); push(code === "M" ? "Marathon" : code === "HMZ" ? "Halbmarathon" : "Test", Math.max(10, main - 25), z, zoneTxt || ""); push("Auslaufen", 10, 1, ""); }
-      else { push(ZN[z] === "Locker" ? "Lauf locker" : ZN[z], main, z, zoneTxt || ""); if (strides) push("Steigerungen", 4, 5, strides[1] + " x 20 s"); }
-    }
-  } else if (s.sport === "Schwimmen") {
-    const segs = d.split(/,(?![^(]*\))/).map(x => x.trim()).filter(Boolean); let any = false;
-    segs.forEach(sg => { const mm = sg.match(/^(?:[A-Za-zäöüÄÖÜ&\- ]+:\s*)?(\d+)\s*(?:'|min)?\s*(ein|aus)?\b|(\d+)\s*x\s*\(?(\d+)/i); const rep = sg.match(/(\d+)\s*x\s*(\d+)/);
-      if (/\bein\b/.test(sg)) { const v = +(sg.match(/(\d+)/) || [])[1]; push("Einschwimmen", /'/.test(sg) ? v : v / 100 * 2.2, 1, sg); any = true; }
-      else if (/\baus\b/.test(sg)) { const v = +(sg.match(/(\d+)/) || [])[1]; push("Ausschwimmen", v / 100 * 2.2, 1, sg); any = true; }
-      else if (rep) { const n = +rep[1], m2 = +rep[2], z = /css|vollgas|schnell/i.test(sg) ? 3 : /drill|seitlage|6-1-6|abschlag|fingertip|einarmig/i.test(sg) ? 1 : 2; push(sg.replace(/\s*\(.*\)/, "").slice(0, 46), n * m2 / 100 * (z === 3 ? 1.9 : 2.3) + n * .3, z, ""); any = true; }
-      else if (/vollgas/i.test(sg)) { const v = +(sg.match(/(\d+)/) || [])[1]; push(sg.slice(0, 40), v / 100 * 1.8, 4, ""); any = true; }
-    });
-    if (/css-test/i.test(d) && !/\bein\b/.test(d)) { steps.length = 0; push("Einschwimmen", 8, 1, "400 m locker"); push("400 m Vollgas", 7, 4, "gleichmäßig"); push("Pause", 10, 1, "locker"); push("200 m Vollgas", 3.5, 4, "gleichmäßig"); push("Ausschwimmen", 5, 1, "200 m locker"); any = true; }
-    if (!any) push("Schwimmen", s.min || 30, 1, "");
-  } else if (s.sport === "Rad") {
-    const m = d.match(/(\d+)\s*x\s*(\d+)\s*['′]/); const z = { R2: 1, R3: 2, R4: 3 }[code] || 1;
-    if (m && z > 1) { push("Einfahren", 15, 1, "locker"); for (let i = 0; i < +m[1]; i++) { push((i + 1) + ". " + m[2] + "'", +m[2], z, zoneTxt || ""); if (i < +m[1] - 1) push("Pause", Math.max(3, Math.round(+m[2] / 3)), 1, "locker"); } const used = steps.reduce((a, x) => a + x.dur, 0); push("Ausfahren", Math.max(10, (s.min || used + 10) - used), 1, ""); }
-    else push(z === 1 ? "Rad locker" : "Rad", s.min || 60, z, zoneTxt || "");
-    if (/koppel/i.test(s.name + " " + d)) { const k = (s.name + " " + d).match(/(\d+)\s*['′]?\s*koppel/i); if (k) push("Koppellauf", +k[1], 2, "direkt nach dem Rad"); }
-  }
-  /* Auf die geplante Dauer skalieren, damit Profil und Ablauf zur Planzeit passen (Pace-Annahmen sind Schätzungen). */
-  const sum = steps.reduce((a, x) => a + x.dur, 0);
-  if (s.min && sum > 0 && Math.abs(sum - s.min) > s.min * .15) { const f = s.min / sum; steps.forEach(x => x.dur = Math.round(x.dur * f * 10) / 10); }
-  return steps;
+const num = v => typeof v === "number" && isFinite(v);
+const nf = x => Number(String(x).replace(/\./g, "").replace(",", "."));
+const nfd = x => Number(String(x).replace(",", "."));
+function paceMid(p) { const m = String(p || "").match(/(\d+):(\d\d)\s*[–-]\s*(\d+):(\d\d)/); if (m) return ((+m[1] * 60 + +m[2]) + (+m[3] * 60 + +m[4])) / 120; const o = String(p || "").match(/(\d+):(\d\d)\s*\/km/); return o ? (+o[1] * 60 + +o[2]) / 60 : null; }
+const mmss = sec => Math.floor(sec / 60) + ":" + String(Math.round(sec % 60)).padStart(2, "0");
+const KIND = { warm: "Einlaufen", cool: "Auslaufen", main: "Hauptteil", easy: "Locker", rest: "Pause", strides: "Steigerungen", drill: "Drill" };
+function runCode(t) { t = String(t || "").toLowerCase();
+  if (/hm-ziel|hm @/.test(t)) return "HMZ"; if (/marathontempo|\bmp\b/.test(t)) return "MP"; if (/md-lauf|mitteldistanz/.test(t)) return "MD"; if (/intervall/.test(t)) return "I";
+  if (/schwelle|od-lauf|od-tempo/.test(t)) return "T"; if (/renntempo|vollgas|so schnell wie/.test(t)) return "TEST"; if (/hf 145|konstant bei hf/.test(t)) return "AC"; if (/locker|ruhig|traben/.test(t)) return "E"; return null; }
+const ZOF = { E: 1, LR: 1, AC: 2, MD: 2, MP: 2, HMZ: 3, T: 3, I: 4, TEST: 4, M: 2, R2: 1, R3: 2, R4: 3 };
+const RUN_HOW = {
+  E: "Locker, du kannst in ganzen Sätzen sprechen. HF-Deckel geht vor Pace.",
+  MP: "Marathontempo: kontrolliert, gleichmäßig, Atmung ruhig. Nicht schneller werden, auch wenn es leicht wirkt.",
+  T: "Schwelle: angenehm hart, nur kurze Sätze möglich (RPE 7). Gleichmäßig, nicht ins Rote gehen.",
+  I: "Intervall: hart, aber kontrolliert (RPE 8–9). Die letzte Wiederholung muss so schnell sein wie die erste.",
+  HMZ: "HM-Zielpace: genau im Zielfenster, nicht schneller. Rhythmus finden, Atmung tief.",
+  MD: "Mitteldistanz-Laufpace: kontrolliert unter der Schwelle, wie im Rennen nach dem Rad.",
+  AC: "Puls exakt halten, Tempo ergibt sich. Gleiche Strecke wie beim letzten Check.",
+  TEST: "Gleichmäßig von Anfang bis Ende, erster Kilometer nicht zu schnell."
+};
+function addRunTargets(st, zf) { const code = st.code, z = zf(code === "LR" ? "E" : code) || {}; st.target = code === "AC" ? "HF konstant 145" : z.pace || ""; st.hf = code === "AC" ? "" : z.hf || ""; st.how = st.how || RUN_HOW[code] || ""; st.z = st.z || ZOF[code] || 1; return st; }
+function splitDesc(d) {
+  d = String(d || "").replace(/\s+/g, " ").trim();
+  const parts = d.split(/(?<=[.!])\s+(?=[A-ZÄÖÜ])/), main = [], notes = [];
+  parts.forEach(p => (/\d/.test(p) && /(km|m\b|'|x\d|\dx|ein\b|aus\b|locker|min)/i.test(p) ? main : notes).push(p.replace(/\.$/, "")));
+  let body = main.join(", "); const lead = body.match(/^([^,]*?):\s+(.*)$/); let total = null, label = "";
+  if (lead && !/\d+\s*x/.test(lead[1])) { label = lead[1]; body = lead[2]; const tk = label.match(/(\d+(?:[.,]\d+)?)\s*km/), tm = label.match(/(\d+)\s*'/); total = tk ? { km: nfd(tk[1]) } : tm ? { min: +tm[1] } : null;
+    const inner = body.match(/^(\d+)\s*'\s*:\s+(.*)$/); if (inner) { total = { min: +inner[1] }; body = inner[2]; } }
+  const tk2 = body.match(/^(\d+(?:[.,]\d+)?)\s*km gesamt:?\s*/); if (tk2) { total = { km: nfd(tk2[1]) }; body = body.slice(tk2[0].length); }
+  const segs = []; let depth = 0, cur = ""; for (const ch of body) { if (ch === "(") depth++; if (ch === ")") depth--; if (ch === "," && depth <= 0) { segs.push(cur.trim()); cur = ""; } else cur += ch; } if (cur.trim()) segs.push(cur.trim());
+  return { segs: segs.filter(Boolean), notes, total, label };
 }
+function restOf(txt) { const m = String(txt || "").replace(/\([^)]*\)/g, "").match(/\/\s*(\d+(?:[.,:]\d+)?)\s*(s|'|min|m|km)?\s*(traben|locker|gehen|pause)?/i); if (!m) return null;
+  const v = m[1].includes(":") ? m[1].split(":").reduce((a, b) => a * 60 + +b, 0) / 60 : nfd(m[1]), u = m[2] || "'";
+  const dur = u === "s" ? v / 60 : u === "m" ? v / 1000 * 6.5 : u === "km" ? v * 6 : v; const lab = u === "s" ? v + " s" : u === "m" ? v + " m" : u === "km" ? v + " km" : (m[1].includes(":") ? m[1] : v) + "'";
+  return { dur, txt: lab + " " + (m[3] && m[3] !== "pause" ? m[3] : "traben") }; }
+/* ---- Laufen ---- */
+function buildRun(s, zf) {
+  const D = splitDesc(s.desc), out = [], mainCode = s.code === "LR" ? "E" : s.code;
+  const push = st => out.push(addRunTargets(st, zf));
+  const segs = D.segs.length ? D.segs : [s.desc];
+  segs.forEach(sg => { let m; const low = sg.toLowerCase();
+    if ((m = sg.match(/^(\d+(?:[.,]\d+)?)\s*km\s+ein(laufen)?\b/i))) { push({ kind: "warm", lab: "Einlaufen", dist: nfd(m[1]), code: "E", how: "Locker einlaufen, letzte Minuten etwas zügiger." }); const k = sg.match(/(\d+)\s*steigerung/i); if (k || /steigerung/i.test(sg)) out.push({ kind: "strides", lab: "Steigerungen", n: k ? +k[1] : 3, dur: .35, z: 5, target: "bis ca. 5-km-Tempo", rest: { dur: 1, txt: "1' gehen/traben" }, how: "15–20 s zügig beschleunigen, locker bleiben, nicht sprinten.", ex: "steigerung" }); return; }
+    if ((m = sg.match(/^(\d+(?:[.,]\d+)?)\s*km\s+aus(laufen)?\b/i))) { push({ kind: "cool", lab: "Auslaufen", dist: nfd(m[1]), code: "E", how: "Locker auslaufen." }); return; }
+    if (/^(locker\s+)?aus(laufen)?$/i.test(sg.trim())) { push({ kind: "cool", lab: "Auslaufen", dist: null, code: "E", how: "Locker auslaufen." }); return; }
+    if ((m = sg.match(/(\d+)\s*x\s*10\s*s\s*hügelsprint/i))) { out.push({ kind: "main", lab: "Hügelsprints", n: +m[1], dur: 10 / 60, z: 5, target: "maximal bergauf, 6–10 % Steigung", rest: { dur: 2, txt: "2' zurückgehen" }, how: "Aufrecht, kräftiger Armeinsatz, kurze Bodenkontakte. Volle Erholung.", ex: "huegelsprint" }); return; }
+    if ((m = sg.match(/(\d+)\s*x\s*(\d+)\s*s\s*steigerung/i)) || (m = sg.match(/(\d+)\s*steigerung/i))) { out.push({ kind: "strides", lab: "Steigerungen", n: +m[1], dur: (m[2] ? +m[2] : 20) / 60, z: 5, target: "bis ca. 5-km-Tempo", rest: { dur: 1, txt: "1' gehen/traben" }, how: "Zügig, locker, nicht sprinten.", ex: "steigerung" }); return; }
+    if ((m = sg.match(/(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*(km|m|'|s|min)(?!\w)\s*(.*)$/i))) {
+      const n = +m[1], v = nfd(m[2]), u = m[3], rest = restOf(m[4]), tail = m[4] || "", head = tail.replace(/\([^)]*\)/g, "").split("/")[0], c0 = runCode(head) || (/zügig|bergauf/.test(tail) ? (u === "s" || (u !== "km" && u !== "m" && v <= 2) ? "I" : "T") : mainCode);
+      const st = { kind: "main", lab: n + " × " + (u === "km" ? v + " km" : u === "m" ? v.toLocaleString("de-DE") + " m" : u === "s" ? v + " s" : v + "'"), n, code: c0, rest: rest || { dur: 2, txt: "2' traben" } };
+      if (u === "km" || u === "m") st.dist = u === "km" ? v : v / 1000; else st.dur = u === "s" ? v / 60 : v;
+      if (/bergauf/i.test(tail)) { st.target2 = (tail.match(/\((\d+[–-]\d+\s*%)\)/) || [])[1] || "bergauf"; st.how = "Bergauf nach Gefühl hart (RPE 8), Schritt kurz, Arme aktiv. Bergab locker zurück."; }
+      push(st); if (/zügig/.test(head) && !runCode(head)) out[out.length - 1].target = "zügig, RPE 7–8 (" + (out[out.length - 1].target || "") + ")"; return; }
+    if ((m = sg.match(/^hm\s*@/i))) { push({ kind: "main", lab: "Halbmarathon", dist: 21.0975, code: "HMZ", how: (D.notes.join(" ") || RUN_HOW.HMZ) }); return; }
+    if ((m = sg.match(/(?:letzte\s+)?(\d+(?:[.,]\d+)?)\s*km\s*(?:@|bei|konstant|vollgas|so schnell)(.*)$/i))) { const c0 = runCode(sg) || mainCode;
+      if (/letzte/i.test(sg)) { const prev = [...out].reverse().find(x => x.kind === "easy" && x.dist); if (prev) { prev.dist = Math.max(1, prev.dist - nfd(m[1])); prev.lab = prev.dist + " km locker"; prev.dur = null; } } push({ kind: "main", lab: nfd(m[1]) + " km " + ({ MP: "Marathontempo", T: "Schwelle", HMZ: "HM-Zielpace", MD: "MD-Laufpace", AC: "bei HF 145", TEST: "Vollgas", I: "Intervall" }[c0] || ""), dist: nfd(m[1]), code: c0 }); return; }
+    if ((m = sg.match(/(\d+)\s*'\s*(?:@|im|so schnell)(.*)$/i))) { const c0 = runCode(sg) || mainCode; push({ kind: "main", lab: m[1] + "' " + ({ MP: "Marathontempo", T: "Schwelle", HMZ: "HM-Zielpace", MD: "MD-Laufpace", TEST: "gleichmäßig voll", I: "Intervall" }[c0] || ""), dur: +m[1], code: c0 }); return; }
+    if ((m = sg.match(/^(\d+(?:[.,]\d+)?)\s*km\s+(locker|ruhig|sehr locker)/i))) { push({ kind: "easy", lab: nfd(m[1]) + " km locker", dist: nfd(m[1]), code: "E" }); return; }
+    if ((m = sg.match(/^(\d+)\s*'\s+(locker|ruhig)/i))) { push({ kind: "easy", lab: m[1] + "' locker", dur: +m[1], code: "E" }); return; }
+    if ((m = sg.match(/^42,2\s*km/i))) { push({ kind: "main", lab: "Marathon", dist: 42.195, code: "M", target: zf("M").pace, how: D.notes.join(" ") }); return; }
+  });
+  /* Nichts erkannt: eine Einheit im Code-Tempo, mit Steigerungen falls genannt */
+  if (!out.some(x => x.kind === "main" || x.kind === "easy")) {
+    const km = (s.desc.match(/^(\d+(?:[.,]\d+)?)\s*km/) || [])[1], mn = (s.desc.match(/(\d+)\s*'/) || [])[1];
+    const st = { kind: s.code === "E" || s.code === "LR" ? "easy" : "main", lab: s.code === "LR" ? "Long Run" : /koppel/i.test(s.name) ? "Koppellauf" : ZN[ZOF[mainCode] || 1] === "Locker" ? "Lauf locker" : s.name.replace(/^★\s*/, ""), code: mainCode };
+    if (km) st.dist = nfd(km); else st.dur = mn ? +mn : s.min || 30;
+    if (/koppel/i.test(s.name + s.desc)) st.how = "Direkt nach dem Rad, Wechsel unter 3'. Die ersten Minuten fühlen sich schwer an, das ist normal. Schrittfrequenz hoch, Schritte kurz.";
+    if (s.code === "LR") st.how = "Gleichmäßig locker, HF-Deckel. Ab 75–90' Verpflegung wie im Rennen testen.";
+    out.unshift(addRunTargets(st, zf)); if (st.kind === "main" && !out.some(x => x.kind === "warm") && (s.min || 0) >= 30) out.unshift(addRunTargets({ kind: "warm", lab: "Einlaufen", dur: 10, code: "E", how: "Locker einlaufen." }, zf));
+  }
+  /* Koppel mit "10' locker, 20' @ MD" ist oben erfasst; Gesamtstrecke: fehlendes Auslaufen ergänzen */
+  const pace = c => paceMid((zf(c === "LR" ? "E" : c) || {}).pace) || 5.6;
+  out.forEach(x => { if (x.dist != null && x.dur == null) x.dur = x.dist * pace(x.code || "E"); if (x.dur != null && x.dist == null && (x.code)) x.dist = x.dur / pace(x.code); });
+  const tot = st => st.reduce((a, x) => a + (x.n || 1) * (x.dist || 0) + (x.n > 1 && x.rest ? (x.n - 1) * x.rest.dur / 6.5 : 0), 0);
+  const T = D.total && D.total.km ? D.total.km : null, cool = out.find(x => x.kind === "cool" && !x.dist0 && x.dist == null);
+  if (T) { const used = tot(out.filter(x => x !== cool)); const restKm = Math.round(Math.max(0, T - used) * 10) / 10;
+    if (cool) { cool.dist = Math.max(1, restKm); cool.dur = cool.dist * pace("E"); } else if (restKm >= 1 && out.some(x => x.kind === "main")) out.push(addRunTargets({ kind: "cool", lab: "Auslaufen", dist: restKm, dur: restKm * pace("E"), code: "E", how: "Locker auslaufen." }, zf)); }
+  else if (cool && cool.dist == null) { cool.dist = 1.5; cool.dur = 1.5 * pace("E"); }
+  return out;
+}
+/* ---- Rad ---- */
+const BIKE_HOW = { R2: "Locker, Gefühl 3–4/10, runder Tritt 85–95 U/min. Lieber leichter Gang.", R3: "Rad-Tempo: kontrolliert zügig, Gefühl 6/10, 80–90 U/min. Renntempo Mitteldistanz.", R4: "Rad-Schwelle: hart, aber gleichmäßig, Gefühl 7–8/10, 85–95 U/min." };
+const BIKE_CAD = { R2: "85–95 U/min", R3: "80–90 U/min", R4: "85–95 U/min" };
+function bikeCode(t) { t = String(t || "").toLowerCase(); if (/schwelle|maximal/.test(t)) return "R4"; if (/tempo|zügig/.test(t)) return "R3"; return "R2"; }
+function buildBike(s, zf) {
+  const D = splitDesc(s.desc), out = [], push = st => { const z = zf(st.code) || {}; st.target = st.target || ("Gefühl " + ({ R2: "3–4", R3: "6", R4: "7–8" }[st.code]) + "/10"); st.hf = z.hf || ""; st.cad = st.cad || BIKE_CAD[st.code]; st.how = st.how || BIKE_HOW[st.code]; st.z = ZOF[st.code]; out.push(st); };
+  let total = D.total && D.total.min ? D.total.min : null; const lead = s.desc.match(/^(\d+)\s*'/); if (!total && lead) total = +lead[1]; if (!total) total = s.min || 60;
+  const segs = D.segs.length ? D.segs : [s.desc];
+  segs.forEach(sg => { let m;
+    if ((m = sg.match(/(\d+)\s*x\s*(\d+)\s*(s|')\s*(?:schnelle\s+)?trittfrequenz/i))) { push({ kind: "drill", lab: m[1] + " × " + m[2] + (m[3] === "s" ? " s" : "'") + " hohe Trittfrequenz", n: +m[1], dur: m[3] === "s" ? +m[2] / 60 : +m[2], code: "R2", cad: "110+ U/min", target: "leichter Gang, Becken ruhig", rest: { dur: 2, txt: "2' locker" }, how: "Trittfrequenz hochdrehen, ohne auf dem Sattel zu hüpfen. Schult einen runden, ökonomischen Tritt.", ex: "trittfrequenz" }); return; }
+    if ((m = sg.match(/(\d+)\s*x\s*(\d+)\s*'\s*(.*)$/i))) { const tail = m[3] || "", c0 = bikeCode(tail), rest = restOf(tail); const st = { kind: "main", lab: m[1] + " × " + m[2] + "' " + ({ R4: "Rad-Schwelle", R3: "Rad-Tempo", R2: "locker" }[c0]), n: +m[1], dur: +m[2], code: c0, rest: rest || { dur: Math.max(3, Math.round(+m[2] / 3)), txt: Math.max(3, Math.round(+m[2] / 3)) + "' locker" } };
+      if (/bergauf/i.test(tail)) { st.lab += " bergauf"; const cd = tail.match(/(\d+[–-]\d+)\s*U\/min/); if (cd) st.cad = cd[1] + " U/min"; st.how = "Bergauf im Sattel, Oberkörper ruhig, gleichmäßiger Druck. HF nicht über dem Band."; st.ex = "rad_berg"; }
+      if (/antritt/i.test(tail)) st.how += " Dazwischen 2 × 30 s Antritt im Sattel."; push(st); return; }
+    if ((m = sg.match(/^(\d+)\s*'\s*(locker|sehr locker|ein)/i))) { push({ kind: "warm", lab: m[1] + "' locker", dur: +m[1], code: "R2" }); return; }
+    if ((m = sg.match(/(\d+)\s*'\s*gleichmäßig maximal/i))) { push({ kind: "main", lab: m[1] + "' gleichmäßig maximal (Test)", dur: +m[1], code: "R4", target: "so hart wie 30' gleichmäßig möglich", how: "Flach, ohne Ampeln oder Indoor-Bike. Erste 5' kontrolliert, dann steigern. Ø HF der letzten 20' notieren." }); return; }
+    if ((m = sg.match(/letzte\s+(\d+)\s*'\s*.*(zügig|tempo)/i))) { push({ kind: "main", lab: "letzte " + m[1] + "' Rad-Tempo", dur: +m[1], code: "R3", atEnd: true }); return; }
+    if ((m = sg.match(/(\d+)\s*'\s*rad-schwelle/i))) { push({ kind: "main", lab: m[1] + "' Rad-Schwelle", dur: +m[1], code: "R4" }); return; }
+    if ((m = sg.match(/^(locker\s+)?aus$/i))) { out.push({ kind: "cool", marker: true }); return; }
+  });
+  /* Ein- und Ausfahren, Rest der Gesamtzeit */
+  const hasMain = out.some(x => x.kind === "main" || x.kind === "drill");
+  const filtered = out.filter(x => !x.marker);
+  const work = filtered.reduce((a, x) => a + (x.n || 1) * (x.dur || 0) + (x.n > 1 && x.rest ? (x.n - 1) * x.rest.dur : 0), 0);
+  const res = [];
+  if (!hasMain) { const c0 = s.code === "R4" ? "R4" : s.code === "R3" ? "R3" : "R2"; const st = []; const tmp = out; out.length = 0; push({ kind: "easy", lab: /ausfahrt/i.test(s.desc) ? "Ausfahrt" : "Rad", dur: total, code: c0 === "R2" ? "R2" : "R2" }); if (c0 !== "R2") out[0].how = BIKE_HOW.R2; return out; }
+  if (!filtered.some(x => x.kind === "warm")) { const w = Math.min(15, Math.max(10, (total - work) / 2)); const t0 = []; out.length = 0; push({ kind: "warm", lab: "Einfahren", dur: Math.round(w), code: "R2" }); filtered.forEach(x => out.push(x)); }
+  else { out.length = 0; filtered.forEach(x => out.push(x)); }
+  const used = out.reduce((a, x) => a + (x.n || 1) * (x.dur || 0) + (x.n > 1 && x.rest ? (x.n - 1) * x.rest.dur : 0), 0), rest = Math.round(total - used);
+  const endBlock = out.find(x => x.atEnd);
+  if (rest >= 5) { const st = { kind: "cool", lab: endBlock ? "Locker fahren" : "Ausfahren", dur: rest, code: "R2" }; const z = zf("R2") || {}; Object.assign(st, { target: "Gefühl 3–4/10", hf: z.hf || "", cad: BIKE_CAD.R2, how: endBlock ? "Locker im Grundlagenbereich." : "Locker ausrollen.", z: 1 }); if (endBlock) out.splice(out.indexOf(endBlock), 0, st); else out.push(st); }
+  return out;
+}
+/* ---- Schwimmen ---- */
+const DRILL_KEYS = [["seitlage", /seitlage/i], ["sechseins", /6-1-6/i], ["abschlag", /abschlag/i], ["fingertip", /fingertip/i], ["einarmig", /einarmig/i], ["dreieratmung", /3er-atmung/i], ["pullbuoy", /pullbuoy/i]];
+function buildSwim(s, css) {
+  const D = splitDesc(s.desc), out = [], sec100 = css || 140, cssKnown = !!css;
+  const tgt = (kind, plus) => kind === "css" ? (cssKnown ? mmss(sec100 + (plus || 0)) + " /100 m" : "Schwellentempo, RPE 7") : kind === "fast" ? (cssKnown ? "schneller als " + mmss(sec100 - 3) + " /100 m" : "schnell, RPE 8–9") : kind === "drill" ? "Technik, ohne Uhr" : (cssKnown ? "ca. " + mmss(sec100 + 12) + "–" + mmss(sec100 + 18) + " /100 m" : "ruhig, RPE 3–4");
+  const mins = (m, kind) => m / 100 * (kind === "drill" ? sec100 + 35 : kind === "css" ? sec100 : kind === "fast" ? sec100 - 5 : sec100 + 15) / 60;
+  const push = st => { st.dur = st.dur ?? (st.n || 1) * mins(st.m || 0, st.k) + ((st.n || 1) - 1) * (st.rest ? st.rest.dur : 0); out.push(st); };
+  let segs = D.segs.length ? D.segs : [s.desc];
+  if (/css-test/i.test(s.desc) && !/\d+\s*ein/.test(s.desc)) segs = ["400 ein", "400 m Vollgas", "10' locker", "200 m Vollgas", "200 aus"];
+  segs.forEach(sg => { let m; const low = sg.toLowerCase(), drill = DRILL_KEYS.find(([, re]) => re.test(sg));
+    if ((m = sg.match(/^(\d+)\s*'\s*ein/i))) { push({ kind: "warm", lab: m[1] + "' einschwimmen", dur: +m[1], z: 1, target: tgt("easy"), how: "Locker Kraul oder Brust im Wechsel, Atmung ruhig, Wasser spüren." }); return; }
+    if ((m = sg.match(/^(\d+)\s*ein/i))) { push({ kind: "warm", lab: m[1] + " m einschwimmen", m: +m[1], k: "easy", z: 1, target: tgt("easy"), how: "Locker gemischt: 100 Kraul, 50 Rücken, 50 Kraul mit Fokus Ausatmen." }); return; }
+    if ((m = sg.match(/^(\d+)\s*aus/i))) { push({ kind: "cool", lab: m[1] + " m ausschwimmen", m: +m[1], k: "easy", z: 1, target: tgt("easy"), how: "Ganz locker, gern Rücken oder Brust." }); return; }
+    if ((m = sg.match(/(\d+)\s*x\s*\(\s*(\d+)\s*x\s*(\d+)\s*@\s*css(?:\s*\+\s*(\d+)\s*s)?\s*\/\s*(\d+)\s*s\s*\)\s*\/\s*(\d+)\s*'/i))) { const n = +m[1] * +m[2]; push({ kind: "main", lab: m[1] + " × (" + m[2] + " × " + m[3] + " m) @ CSS", n, m: +m[3], k: "css", z: 3, target: tgt("css", +(m[4] || 0)), rest: { dur: +m[5] / 60, txt: m[5] + " s am Rand, nach jedem Block " + m[6] + "'" }, how: "Alle Wiederholungen in derselben Zeit. Uhr am Beckenrand, Zeiten notieren.", ex: "css" }); return; }
+    if ((m = sg.match(/(\d+)\s*x\s*(\d+)\s*(?:m\s*)?(.*)$/i))) {
+      const n = +m[1], mm = +m[2], tail = m[3] || "", rest = (tail.match(/\/\s*(\d+)\s*s/) || [])[1], restM = (tail.match(/\/\s*(\d+)\s*'/) || [])[1];
+      const k = /css/i.test(tail) ? "css" : /schnell|vollgas|renntempo|zügig/i.test(tail) ? "fast" : drill || /drill|technikfokus/i.test(tail) ? "drill" : "easy";
+      const plus = +((tail.match(/css\s*\+\s*(\d+)/i) || [])[1] || 0);
+      const lab = n + " × " + mm + " m " + (drill ? EX[drill[0]].n : k === "css" ? "@ CSS" + (plus ? "+" + plus + " s" : "") : k === "fast" ? "schnell" : /technikfokus/i.test(tail) ? "Technikfokus" : /drill/i.test(tail) ? "Drill" : "Kraul ruhig") + (/pullbuoy/i.test(tail) && !drill ? " (mit Pullbuoy)" : "");
+      const rd = rest ? +rest / 60 : restM ? +restM : k === "drill" ? .5 : k === "css" ? .25 : .4;
+      const how = drill ? EX[drill[0]].cue.join(". ") + "." : k === "css" ? "Gleichmäßig, jede Wiederholung in derselben Zeit. Zeiten notieren." : k === "fast" ? "Zügig mit sauberer Technik, nicht verkrampfen." : /technikfokus/i.test(tail) ? "Je 50 m ein Fokus: lang machen, Ellbogen hoch, ausatmen unter Wasser, Rotation aus der Hüfte." : /nr\.\s*2 und 4 mit pullbuoy|mittlere mit pullbuoy/i.test(tail) ? "Ruhig, " + (tail.match(/\(([^)]*)\)/) || [, ""])[1] + ". Gleichmäßiger Rhythmus." : "Ruhig und gleichmäßig, auf lange Züge achten.";
+      push({ kind: k === "drill" ? "drill" : "main", lab, n, m: mm, k, z: k === "css" ? 3 : k === "fast" ? 4 : k === "drill" ? 1 : 2, target: tgt(k, plus), rest: { dur: rd, txt: rest ? rest + " s Pause" : restM ? restM + "' Pause" : k === "drill" ? "20–30 s Pause" : "15–30 s Pause" }, how, ex: drill ? drill[0] : k === "css" ? "css" : /technikfokus/i.test(tail) ? "kraul" : null }); return; }
+    if ((m = sg.match(/(\d+)\s*m\s*vollgas/i))) { push({ kind: "main", lab: m[1] + " m Vollgas", m: +m[1], k: "fast", z: 4, target: cssKnown ? "so schnell wie gleichmäßig möglich" : "gleichmäßig maximal", how: "Nicht zu schnell anschwimmen, Zeit stoppen und notieren.", ex: "csstest" }); return; }
+    if ((m = sg.match(/^(\d+)\s*'\s*locker/i))) { push({ kind: "easy", lab: m[1] + "' locker", dur: +m[1], z: 1, target: tgt("easy"), how: "Locker schwimmen, bei Bedarf Pausen am Rand." }); return; }
+  });
+  if (!out.length) {
+    const mn = (s.desc.match(/(\d+)\s*'/) || [])[1], mtot = (s.desc.match(/(\d[\d.]*)\s*m\b/) || [])[1];
+    if (/drill/i.test(s.desc) || /technik/i.test(s.name)) {
+      const T = s.min || 30; push({ kind: "warm", lab: "200 m einschwimmen", m: 200, k: "easy", z: 1, target: tgt("easy"), how: "Locker gemischt." });
+      [["seitlage", 4], ["sechseins", 4], ["abschlag", 4]].forEach(([k, n]) => push({ kind: "drill", lab: n + " × 25 m " + EX[k].n, n, m: 25, k: "drill", z: 1, target: tgt("drill"), rest: { dur: .5, txt: "20–30 s Pause" }, how: EX[k].cue.join(". ") + ".", ex: k }));
+      const rep = (s.desc.match(/(\d+)\s*x\s*(\d+)/) || []); if (rep.length) push({ kind: "main", lab: rep[1] + " × " + rep[2] + " m Kraul ruhig", n: +rep[1], m: +rep[2], k: "easy", z: 2, target: tgt("easy"), rest: { dur: .5, txt: "20–30 s Pause" }, how: "Ruhig, Technik aus den Drills mitnehmen." });
+      push({ kind: "cool", lab: "100 m ausschwimmen", m: 100, k: "easy", z: 1, target: tgt("easy"), how: "Ganz locker." });
+    } else if (/freiwasser|neo/i.test(s.desc) || s.code === "OW") {
+      const reps = s.desc.match(/(\d+)\s*x\s*(\d+)\s*(?:m\s*)?(renntempo|zügig)?/i), repsMin = s.desc.match(/(\d+)\s*x\s*(\d+)\s*'\s*renntempo/i);
+      push({ kind: "warm", lab: "Eingewöhnen", dur: 5, z: 1, target: "ruhig", how: "Neo richtig sitzen lassen, Gesicht ins Wasser, ausatmen. Erst ruhig anschwimmen.", ex: "neo" });
+      if (repsMin) push({ kind: "main", lab: repsMin[1] + " × " + repsMin[2] + "' Renntempo", n: +repsMin[1], dur: +repsMin[2], z: 3, target: "Renntempo, RPE 7", rest: { dur: 1, txt: "1' ruhig" }, how: "Alle 6–8 Züge orientieren, gerade Linie halten.", ex: "sighting" });
+      else if (reps) push({ kind: "main", lab: reps[1] + " × " + reps[2] + " m " + (reps[3] || "zügig"), n: +reps[1], m: +reps[2], k: reps[3] ? "fast" : "easy", z: 3, target: "Renntempo, RPE 7", rest: { dur: 1, txt: /boje/i.test(s.desc) ? "1' an der Boje" : "1' ruhig" }, how: "Orientierung alle 6–8 Züge. Wendepunkt eng um die Boje.", ex: "sighting" });
+      const rest = Math.max(5, (s.min || 30) - out.reduce((a, x) => a + x.dur, 0) - 3); push({ kind: "easy", lab: (mtot ? mtot + " m" : rest + "'") + (/renntempo/i.test(s.desc) && !reps && !repsMin ? " im Renntempo" : " ruhig am Stück"), dur: rest, z: /renntempo/i.test(s.desc) && !reps ? 3 : 2, target: /renntempo/i.test(s.desc) && !reps ? "Renntempo" : "ruhig, gleichmäßig", how: "Orientierung alle 6–8 Züge, ruhige Atmung, nie allein (Begleitung oder Boje).", ex: "sighting" });
+    } else push({ kind: "easy", lab: (mn ? mn + "'" : "Schwimmen") + " ruhig", dur: mn ? +mn : s.min || 30, z: 1, target: tgt("easy"), how: "Locker, auf lange Züge und ruhige Ausatmung achten.", ex: "kraul" });
+  }
+  return out;
+}
+/* Einstieg: Abschnitte je Sportart. Für Profil-Balken expandiert profileOf die Wiederholungen. */
+function buildWorkout(s, zf, css) {
+  let st = [];
+  try {
+    if (s.sport === "Lauf") st = buildRun(s, zf);
+    else if (s.sport === "Rad") st = buildBike(s, zf);
+    else if (s.sport === "Schwimmen") st = buildSwim(s, css);
+  } catch (e) { return []; }
+  const tot = totalMin(st);
+  if (s.min && st.length && tot < s.min * .8) {
+    if (s.sport === "Schwimmen") {
+      const sec = css || 140, gap = s.min - tot, ez = css ? "ca. " + mmss(sec + 12) + "–" + mmss(sec + 18) + " /100 m" : "ruhig, RPE 3–4";
+      if (!st.some(x => x.kind === "warm")) { const m0 = gap > 12 ? 300 : 200; st.unshift({ kind: "warm", lab: m0 + " m einschwimmen", m: m0, dur: m0 / 100 * (sec + 15) / 60, z: 1, target: ez, how: "Locker gemischt: Kraul, Rücken, Brust. Atmung ruhig." }); }
+      if (!st.some(x => x.kind === "cool")) st.push({ kind: "cool", lab: "100 m ausschwimmen", m: 100, dur: (sec + 15) / 60, z: 1, target: ez, how: "Ganz locker." });
+      const t2 = totalMin(st); if (t2 < s.min * .8) { const f = s.min / t2; st.forEach(x => { x.dur = x.dur * f; }); }
+    }
+    else if (s.sport === "Lauf" && st.some(x => x.kind === "main")) { const add = Math.round(s.min - tot), i = st.findIndex(x => x.kind === "main"); const z = zf("E") || {}; st.splice(i, 0, { kind: "easy", lab: add + "' locker", dur: add, code: "E", z: 1, target: z.pace || "", hf: z.hf || "", how: /koppel/i.test(s.name + s.desc) ? "Direkt nach dem Rad locker anlaufen, Schritte kurz, Frequenz hoch." : "Locker." }); }
+  }
+  return st;
+}
+function profileOf(steps) { const out = []; steps.forEach(x => { const n = x.n || 1; for (let i = 0; i < n; i++) { out.push({ dur: n > 1 ? (x.dur ? (x.n > 1 && x.m ? x.dur / n : x.dur) : 1) : x.dur || 1, z: x.z || 1 }); if (i < n - 1 && x.rest) out.push({ dur: x.rest.dur, z: 1 }); } }); return out; }
+function totalMin(steps) { return steps.reduce((a, x) => a + (x.m != null ? x.dur : (x.n || 1) * (x.dur || 0) + ((x.n || 1) - 1) * (x.rest ? x.rest.dur : 0)), 0); }
+/* Rückwärtskompatibel für bestehende Aufrufe */
+function workoutSteps(s, zoneTxt) { const st = buildWorkout(s, c => ({ pace: zoneTxt || "", hf: "" }), null); const out = []; st.forEach(x => { const n = x.n || 1; for (let i = 0; i < n; i++) { out.push({ lab: n > 1 ? (i + 1) + ". " + x.lab.replace(/^\d+\s*×\s*/, "") : x.lab, dur: Math.round((x.m != null ? x.dur / n : x.dur || 1) * 10) / 10, z: x.z || 1, note: x.target || "" }); if (i < n - 1 && x.rest) out.push({ lab: x.rest.txt.includes("traben") ? "Trabpause" : "Pause", dur: Math.round(x.rest.dur * 10) / 10, z: 1, note: x.rest.txt }); } });
+  const sum = out.reduce((a, x) => a + x.dur, 0); if (s.min && sum > 0 && Math.abs(sum - s.min) > s.min * .3) { const f = s.min / sum; out.forEach(x => x.dur = Math.round(x.dur * f * 10) / 10); } return out; }
+
 /* Standardübungen, wenn der Plan nur allgemein formuliert ("Drills nach Lust", "Ganzkörper leicht", Freiwasser). */
 const DEFAULTS = { Schwimmen: ["seitlage", "sechseins", "abschlag", "pullbuoy"], OW: ["sighting", "dreieratmung", "neo"], Kraft: ["kniebeuge", "rdl", "split", "waden", "plank"], Mobility: ["hueftmob", "wademob", "hallux"] };
 function exercisesFor(s) {
@@ -175,5 +306,5 @@ function exercisesFor(s) {
   return [];
 }
 
-G.Library = { exercisesFor, EX, exercisesIn, exercise, doseFor, workoutSteps, ZN, yt };
+G.Library = { buildWorkout, profileOf, totalMin, paceMid, VIDEOS, exercisesFor, EX, exercisesIn, exercise, doseFor, workoutSteps, ZN, yt };
 })(typeof window !== "undefined" ? window : globalThis);

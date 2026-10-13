@@ -1,4 +1,28 @@
-# Performance Lab 3.1: Klick-Anleitung
+# Performance Lab 3.2: Klick-Anleitung
+
+## Neu in 3.2
+
+- **Übersicht statt Heute:** Die erste Seite ist dein Dashboard. Ganz oben steht das Coach-Briefing mit Bereitschaft, darunter das nächste Training, auch wenn es erst morgen oder übermorgen ist. Danach kommen Kacheln:
+  - Nächste 7 Tage
+  - Woche
+  - Ernährung heute mit Tagebuch
+  - Körper (Morgen-Check, Gewicht)
+  - Fortschritt aller Disziplinen
+  - Termine und Abwesenheiten
+  - Nächster Test
+- **Mac:** Einheiten, Tage, Eintragen, Verpflegung und Ernährung öffnen sich rechts in der Seitenleiste statt in einem Fenster. **Zurück** führt eine Ebene zurück. Verschiebst du eine Einheit, folgt die Seitenleiste ihr an den neuen Tag.
+- **So trainierst du:** Jede Lauf-, Rad- und Schwimmeinheit ist in Abschnitte zerlegt:
+  - **Schwimmen:** Meter, Tempo pro 100 m (nach dem CSS-Test exakt), Pause am Rand und Technikfokus.
+  - **Laufen:** Strecke, Pace, Puls und Pause.
+  - **Rad:** Dauer, Gefühl, Puls, Trittfrequenz und Pause.
+  - Den Originaltext aus dem Plan findest du darunter.
+- **Videos:** 40 geprüfte Technikvideos (Schwimmdrills, CSS, Freiwasser, Neo, Lauf-ABC, Steigerungen, Hügelsprints, Trittfrequenz, Bergauffahren, Koppel, Kraft, Fuß, Mobility). Sie laden erst, wenn du auf das Vorschaubild tippst, und spielen dann direkt in der App.
+- **Leistung je Disziplin:** Zu Halbmarathon, Marathon, Schwimmen, Radfahren, Olympischer Distanz und Mitteldistanz siehst du jeweils den aktuellen Stand, das Ziel, den Abstand, den Verlauf und was es dafür braucht.
+- **Abwesenheiten:** Unter **Profil**, **Alle Abwesenheiten** oder über die Kachel **Termine** trägst du beliebig viele ein: Krank, Dienstreise, Urlaub oder privat unterwegs, auch überlappend. Du kannst sie bearbeiten und löschen. Alte Krankheiten bleiben im Archiv. Sie erscheinen farbig in Monat, Woche, Tag und in den nächsten 7 Tagen und im Kalender-Export als ganztägige Termine.
+- **Morgen-Check:** Schlaf, Schlafqualität, Gefühl, Muskelkater, Ruhepuls und Gewicht dauern 10 Sekunden. Bei Gelb wird die harte Einheit von heute locker, bei Rot auch die von morgen.
+- **Gewicht:** Die App zeigt den Trend statt Tageswerten. Die Ernährungsziele rechnen mit dem Trend und warnen, wenn du im Aufbau zu schnell abnimmst.
+- **Ernährungstagebuch:** Pro Tag schreibst du Frühstück, Mittag, Abend, Snacks und eine Notiz frei mit. Beim Zurückschreiben landet das im neuen Blatt **App-Tagebuch** der Excel.
+- **Wochen-Review mit Claude:** Jeden Sonntag um 19 Uhr prüft Claude die zurückgeschriebene Excel. Das Review liegt dann in `App-Entwicklung/Reviews`, mit einer fertigen KI-Antwort zum Einfügen. Vorher in der App **Zurück ins Excel schreiben** und die Datei ersetzen.
 
 ## Neu in 3.1
 

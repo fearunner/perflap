@@ -1,4 +1,16 @@
-# Performance Lab 3.2: Klick-Anleitung
+# Triger 3.3: Klick-Anleitung
+
+Triger ist der neue Name von Performance Lab. Deine Daten bleiben erhalten. Neuen Namen und neues Icon auf dem iPhone bekommst du so: das alte Icon löschen und die Seite in Safari wieder über **Teilen**, **Zum Home-Bildschirm** hinzufügen. Erst neu laden, dann löschen, damit nichts verloren geht. Deine Daten liegen im Browser und bleiben.
+
+## Neu in 3.3
+
+- **Triger:** Der Tiger ist dein Coach. Oben in der Übersicht sagt er dir in einem Satz, worum es heute geht. Daneben siehst du deine Bereitschaft. Darunter stehen nur der Morgen-Check, die Verpflegung und der KI-Coach.
+- **Weniger auf einmal:** Unter dem nächsten Training liegen einklappbare Gruppen wie in den iPhone-Einstellungen: Nächste 7 Tage, Diese Woche, Ernährung, Körper, Fortschritt, Termine und Nächster Test. Rechts in jeder Zeile steht die Kurzinfo. Ein Tipp klappt die Gruppe auf, die App merkt sich das. Leistung, Daten und Profil funktionieren genauso.
+- **Mac:** Das Symbol oben in der linken Seitenleiste klappt sie auf eine schmale Symbolleiste ein. Das Symbol oben rechts in der Detailleiste blendet diese aus. Sobald du eine Einheit öffnest, kommt sie von selbst zurück.
+- **iPhone:** Beim Runterscrollen verschwindet die Tab-Leiste. Beim Hochscrollen, am Seitenende oder nach kurzer Pause ist sie wieder da.
+- **Plan passt sich selbst an:** Die langen Läufe der nächsten drei Wochen baut Triger ab deinem längsten eingetragenen Lauf neu auf, mit höchstens 10 % mehr pro Woche. Das passiert automatisch, und die Gruppe **Triger hat deinen Plan angepasst** zeigt, was sich geändert hat. Mit **Zurücknehmen** machst du es rückgängig. Läufst du wieder länger, zieht der Plan von selbst an.
+- **Excel direkt verbinden (Mac, Edge oder Chrome):** Gehe zu **Profil**, **Export**, **Excel verbinden** und wähle einmal die Datei `Trainingsplan_2026-2027.xlsx` im Ordner „Laufen & Triathlon“. Danach speichert Triger nach jeder Änderung selbst hinein. Du musst nichts mehr herunterladen oder ersetzen. Fragt Edge nach einem Neustart nach Erlaubnis, tippe einmal auf die Zeile. Ist die Datei gerade in Excel geöffnet, schließe sie kurz.
+- **Wichtig:** **Protokoll als eigene Datei** ist nur eine Ansicht und ändert den Plan nicht. Für Claude zählt die verbundene Excel.
 
 ## Neu in 3.2
 

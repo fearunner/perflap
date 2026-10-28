@@ -45,6 +45,10 @@ function parseWorkbook(XLSX, buf) {
       time: ((String(r[2] || "").match(/\d\d:\d\d–\d\d:\d\d/) || [""])[0]),
       wake: ((String(r[21] || "").match(/Wecker (\d+:\d\d)/) || [, ""])[1]), hint: String(r[21] || "").replace(/Wecker \d+:\d\d\n?/, "").trim(),
       typ, row: ri + 5, test: typ ? (RACE_TYPES.includes(typ) ? "race" : "test") : "", tkey: typ ? date + "-" + typ : "", trip: /✈/.test(String(r[2] || "")) || /^Reise/.test(String(r[5] || "")) };
+    /* v3.3: zurückgeschriebene Excel neu geladen: Präfixe der App verstehen statt als Namen anzeigen. */
+    const pre = (s.name.match(/^\[(entfällt|verschoben|App)\]\s*/) || [])[1];
+    if (pre) { s.name = s.name.replace(/^\[(entfällt|verschoben|App)\]\s*/, ""); s.xl = pre; if (pre === "entfällt") { s.dropped = true; s.note = String(r[21] || "").replace(/^\[App\]\s*/, "").split("\n")[0]; } }
+    if (/^\[App\]/.test(s.hint)) s.hint = ""; /* App-Vermerk wird beim Zurückschreiben neu erzeugt, sonst doppelt */
     plan.push(s);
     const st = String(r[10] || "").trim();
     if (["✓", "½", "✗"].includes(st) || num(r[11]) || num(r[12])) seed["log:" + s.id] = Object.assign({ st: ["✓", "½", "✗"].includes(st) ? st : "", ikm: num(r[11]) ? r[11] : null, imin: num(r[12]) ? r[12] : null }, st === "✗" && /^\[App\] krank/.test(String(r[21] || "")) ? { why: "krank" } : {});
@@ -160,10 +164,12 @@ function sickOn(st, d, t) { return !!sickRecOn(st, d, t); }
 /* Pausiert die Krankheit diese Einheit? Erkältung oberhalb des Halses: nein (locker erlaubt). Verletzung: nur betroffene Sportarten. Alte Einträge ohne Kategorie: ja. */
 function sickPauses(st, s, t) { const k = (num(t) ? sickRecOn(st, s.date, t) : null) || val(st, "sick") || {}; if (k.cat === "hals") return false; if (k.cat === "verletzung") return injAffects(k.region, s); return true; }
 function statusOf(st, s, t) { const l = val(st, "log:" + s.id); if (l && l.st) return l.st; if (s.date <= t && sickOn(st, s.date, t) && isTrain(s) && sickPauses(st, s, t)) return "krank"; return ""; }
+/* Distanz in km. Schwimmen wird in Metern eingegeben; Werte über 20 sind Meter, die ohne Umrechnung gespeichert wurden (Fehler bis 3.2.0). */
+function distKm(s, l) { const d = l && num(l.dist) ? l.dist : null; return d != null && s && s.sport === "Schwimmen" && d > 20 ? d / 1000 : d; }
 function actual(st, s, t) {
   const l = val(st, "log:" + s.id) || {}, x = statusOf(st, s, t), f = x === "✓" ? 1 : x === "½" ? .5 : 0;
   if (!f) return { km: 0, min: 0 };
-  const km = num(l.dist) ? l.dist : num(l.ikm) ? l.ikm : s.km * f, min = num(l.dur) ? l.dur : num(l.imin) ? l.imin : s.min * f;
+  const dk = distKm(s, l), km = dk != null ? dk : num(l.ikm) ? l.ikm : s.km * f, min = num(l.dur) ? l.dur : num(l.imin) ? l.imin : s.min * f;
   return { km, min };
 }
 function raceWindows(E) { return E.filter(s => s.test === "race").map(s => ({ from: s.date - (["M", "MD"].includes(s.typ) ? 12 : 4), to: s.date, name: s.name })); }
@@ -561,22 +567,17 @@ function proposals(B, st, t) {
     }
   }
 
-  // 6 Long-Run-Sprung: Hinweis mit Vorschlag, wenn der nächste lange Lauf > 10 % über dem längsten erledigten Lauf der letzten 30 Tage liegt (Frandsen et al. 2025)
+  // 6 v3.3 Neuplanung Long Run: alle langen Läufe der nächsten 3 Wochen wachsen ab deinem echten Stand um höchstens 10 % pro Woche (Frandsen et al. 2025). Automatisch, mit Rückgängig.
   {
-    const nx = E.find(s => s.date >= t && s.date <= t + 14 && open(s) && s.sport === "Lauf" && (s.code === "LR" || s.code === "LRM") && s.km >= 15);
-    if (nx) {
-      const prev = E.filter(s => s.date >= nx.date - 30 && s.date < t && s.sport === "Lauf" && isTrain(s) && !sickOn(st, s.date, t));
-      const logged = prev.some(s => statusOf(st, s, t)) || freeList(st).some(f => f.sport === "Lauf" && f.date >= nx.date - 30 && f.date < t);
-      if (logged) {
-        const best = longestDone(E, st, t, nx.date - 30, t - 1);
-        const cap = best > 0 ? Math.max(12, Math.round(best * 1.1)) : Math.max(12, Math.round(nx.km * .6));
-        if (nx.km > cap) {
-          const min = r5(nx.min * cap / nx.km);
-          add({ key: "lrcap:" + nx.id + ":" + cap, sev: "info", needsOk: true, title: "Long Run: Sprung " + (best ? "+" + Math.round((nx.km / best - 1) * 100) + " %" : "ohne Vorlauf") + ", Vorschlag " + cap + " km",
-            why: (best > 0 ? "Dein längster erledigter Lauf der letzten 30 Tage: " + r1(best) + " km. " : "In den letzten 30 Tagen wurde kein Lauf erledigt. ") + "Geplant sind " + nx.km + " km. In einer Kohorte mit 5.200 Läufern stieg das Überlastungsrisiko, wenn ein einzelner Lauf mehr als 10 % über dem längsten der letzten 30 Tage lag (Frandsen et al. 2025, Beobachtungsstudie). Du entscheidest: übernehmen oder Plan lassen.",
-            ops: [{ type: "edit", id: nx.id, patch: { km: cap, min, name: "Long Run " + cap + " km (statt " + nx.km + ")", time: timeRange(tStart(nx.time), min) }, note: "Höchstens +10 % zum längsten Lauf der letzten 30 Tage." }] });
-        }
-      }
+    const lrs = E.filter(s => s.date >= t && s.date <= t + 21 && open(s) && s.sport === "Lauf" && ["LR", "LRM"].includes(s.code) && s.km >= 8 && !s.test);
+    const logged = E.some(s => s.date >= t - 30 && s.date < t && isTrain(s) && statusOf(st, s, t) && statusOf(st, s, t) !== "krank") || freeList(st).some(f => f.date >= t - 30 && f.date < t);
+    if (lrs.length && logged && !sickOn(st, t, t)) {
+      const best = longestDone(E, st, t, t - 30, t - 1), base = best > 0 ? best : 5;
+      const ops = [], lines = [];
+      lrs.forEach(s => { const n = Math.max(1, Math.ceil((s.date - t + 1) / 7)), cap = Math.max(6, Math.round(base * Math.pow(1.1, n) * 2) / 2);
+        if (s.km > cap + .4) { const min = r5(s.min * cap / s.km); ops.push({ type: "edit", id: s.id, patch: { km: cap, min, name: "Long Run " + String(cap).replace(".", ",") + " km (statt " + s.km + ")", time: timeRange(tStart(s.time), min) }, note: "Aufbau ab deinem Stand: +10 % pro Woche." }); } });
+      if (ops.length) add({ key: "lrplan:" + ops.map(o => o.id + "=" + o.patch.km).join(","), sev: "info", title: "Long Runs neu aufgebaut ab " + String(r1(base)).replace(".", ",") + " km",
+        why: (best > 0 ? "Dein längster erledigter Lauf der letzten 30 Tage: " + String(r1(best)).replace(".", ",") + " km. " : "In den letzten 30 Tagen ist kein Lauf eingetragen, Basis 5 km. ") + "Die nächsten langen Läufe steigen ab da um höchstens 10 % pro Woche. Größere Sprünge erhöhen das Überlastungsrisiko deutlich (Frandsen et al. 2025, 5.200 Läufer). Sobald du länger läufst, zieht der Plan automatisch wieder an.", ops });
     }
   }
   const order = { bad: 0, warn: 1, info: 2 };
@@ -654,8 +655,10 @@ function vdotTargets(B) { return { m: vdot(42.195, B.S.tgtM * 1440), hm: vdot(21
 /* Wochenstatistik: Soll/Ist je Sportart, Schlüsseleinheiten, Erfüllung. */
 function weekStats(B, st, t, E) {
   E = E || effective(B, st); const NW = Math.max(...B.plan.map(p => p.w)), W = [], fr = freeList(st);
+  /* Verpasst und nachgeholt: Soll nur einmal zählen, Ist aus der nachgeholten Einheit. */
+  const cl = new Set(E.filter(s => s.added && !s.dropped && String(s.id).includes("~")).map(s => String(s.id).split("~")[0])), hasClone = s => !s.added && cl.has(s.id);
   for (let w = 1; w <= NW; w++) {
-    const a = E.filter(s => s.w === w && isTrain(s)), o = { w, start: B.S.start + 7 * (w - 1), so: 0, is: 0, sp: {}, keyTot: 0, keyDone: 0, past: B.S.start + 7 * w - 1 < t, cur: false };
+    const a = E.filter(s => s.w === w && isTrain(s) && !hasClone(s)), o = { w, start: B.S.start + 7 * (w - 1), so: 0, is: 0, sp: {}, keyTot: 0, keyDone: 0, past: B.S.start + 7 * w - 1 < t, cur: false };
     o.cur = t >= o.start && t <= o.start + 6;
     a.forEach(s => { const x = actual(st, s, t), k = s.sport; o.so += s.min; o.is += x.min; const z = o.sp[k] = o.sp[k] || { so: 0, is: 0, km: 0, kmIs: 0 };
       z.so += s.min; z.is += x.min; z.km += s.km; z.kmIs += x.km;
@@ -1181,24 +1184,33 @@ function wbPaths(wbXml, relXml) {
 function writeBackCells(B0, B, st, t) {
   const E = effective(B, st), byId = new Map(E.map(s => [s.id, s])), plan = {}, weeks = {}, tests = {}, stat = { status: 0, ist: 0, changed: 0, moved: 0, chk: 0, tests: 0, free: freeList(st).length };
   const priv = new Set(activeAdj(st).filter(a => /^sick/.test(a.key || "")).map(a => a.id));
+  /* Verschobene Einheiten haben keine eigene Excel-Zeile (ID mit ~). Ihr Ergebnis gehört in die Zeile der Ursprungseinheit. */
+  const moved = id => E.filter(y => y.added && !y.dropped && String(y.id).split("~")[0] === id).sort((a, b) => b.date - a.date)[0];
+  const logOf = s => { const x = s.date <= t ? statusOf(st, s, t) : (val(st, "log:" + s.id) || {}).st || "", l = val(st, "log:" + s.id) || {}; return { x, l, stv: x === "krank" ? "✗" : ["✓", "½", "✗"].includes(x) ? x : null }; };
   B0.plan.forEach(o => {
-    if (!o.row) return; const s = byId.get(o.id); if (!s) return; const r = o.row;
-    const x = s.date <= t ? statusOf(st, s, t) : (val(st, "log:" + s.id) || {}).st || "", l = val(st, "log:" + s.id) || {};
-    const stv = x === "krank" ? "✗" : ["✓", "½", "✗"].includes(x) ? x : null;
+    if (!o.row) return; const s = byId.get(o.id); if (!s) return; const r = o.row, mv = moved(o.id);
+    const own = logOf(s), via = mv ? logOf(mv) : null, use = via && via.stv ? { s: mv, ...via } : { s, ...own };
+    const { x, l, stv } = use;
     plan["K" + r] = stv; if (stv) stat.status++;
-    if (x === "krank" && !s.dropped && !s.edited) plan["V" + r] = "[App] krank" + (o.hint ? " " + o.hint : "");
-    const ik = num(l.dist) ? r1(l.dist) : num(l.ikm) ? l.ikm : null, im = num(l.dur) ? Math.round(l.dur) : num(l.imin) ? l.imin : null;
+    if (x === "krank" && !s.dropped && !s.edited && !mv) plan["V" + r] = "[App] krank" + (o.hint ? " " + o.hint : "");
+    const dk = distKm(use.s, l), ik = dk != null ? r1(dk) : num(l.ikm) ? l.ikm : null, im = num(l.dur) ? Math.round(l.dur) : num(l.imin) ? l.imin : null;
     plan["L" + r] = stv && stv !== "✗" ? ik : null; plan["M" + r] = stv && stv !== "✗" ? im : null; if (ik != null || im != null) stat.ist++;
-    if (s.dropped) {
-      const mv = E.find(y => y.movedFrom === s.date && String(y.id).startsWith(s.id + "~") && !y.dropped);
-      plan["F" + r] = (mv ? "[verschoben] " : "[entfällt] ") + o.name.replace(/^\[(entfällt|verschoben|App)\]\s*/, "");
+    const base = o.name.replace(/^\[(entfällt|verschoben|App)\]\s*/, "");
+    if (mv) {
+      const same = weekOf(B0, mv.date) === o.w;
+      plan["F" + r] = "[verschoben] " + base;
+      plan["I" + r] = same ? mv.km || 0 : 0; plan["J" + r] = same ? mv.min || 0 : 0;
+      plan["V" + r] = "[App] Verschoben auf " + wdD(mv.date) + (mv.time ? " " + mv.time : "") + "." + (via.stv ? (via.stv === "✗" ? " Dort verpasst." : " Dort erledigt.") : own.stv === "✗" ? " Hier verpasst, dort offen." : "") + (same ? "" : " Andere Woche: Umfang zählt in der Excel weiter hier.") + (o.hint ? " " + o.hint : "");
+      stat.moved++;
+    } else if (s.dropped) {
+      plan["F" + r] = "[entfällt] " + base;
       plan["I" + r] = 0; plan["J" + r] = 0;
-      plan["V" + r] = "[App] " + (mv ? "Verschoben auf " + wdD(mv.date) + (mv.time ? " " + mv.time : "") + "." : priv.has(s.adj) ? "Angepasst." : (s.note || "Entfällt.")) + (o.hint ? " " + o.hint : "");
-      mv ? stat.moved++ : stat.changed++;
+      plan["V" + r] = "[App] " + (priv.has(s.adj) ? "Angepasst." : (s.note || "Entfällt.")) + (o.hint ? " " + o.hint : "");
+      stat.changed++;
     } else if (s.edited) {
       plan["F" + r] = priv.has(s.adj) ? "[App] Angepasste Einheit" : "[App] " + s.name.replace(/^★\s*/, "");
-      if (s.km !== o.km) plan["I" + r] = s.km || 0; if (s.min !== o.min) plan["J" + r] = s.min || 0;
-      plan["V" + r] = "[App] " + (priv.has(s.adj) ? "Angepasst." : "Ursprünglich: " + o.name + ". " + (s.note || "")) + (o.hint ? " " + o.hint : "");
+      if (s.km !== o.km) plan["I" + r] = s.km || 0; if (s.min !== o.min) plan["J" + r] = s.min || 0; if (s.prio && s.prio !== o.prio) plan["D" + r] = s.prio;
+      plan["V" + r] = "[App] " + (priv.has(s.adj) ? "Angepasst." : "Ursprünglich: " + base + ". " + (s.note || "")) + (o.hint ? " " + o.hint : "");
       stat.changed++;
     }
   });
@@ -1296,9 +1308,9 @@ function ics(B, st, t) {
 }
 
 /* v3.0: Darf die Automatik diesen Vorschlag übernehmen? Nicht bei Tests, Rennen, Long-Run-Hinweis oder manuellen Aktionen. */
-function autoOk(p, E, st) { if (!p || !p.ops || !p.ops.length || p.needsOk) return false; if (/^(lrcap|man|mand|ai):/.test(p.key)) return false;
+function autoOk(p, E, st) { if (!p || !p.ops || !p.ops.length || p.needsOk) return false; if (/^(man|mand|ai):/.test(p.key)) return false;
   if (st && p.ops.some(o => val(st, "nou:" + (o.type === "add" ? String(o.s.id).split("~")[0] : o.id)))) return false;
   return !p.ops.some(o => isTestOp(o, E) || (o.type !== "add" && (E.find(x => x.id === o.id) || {}).test === "race")); }
-G.Engine = { disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, writeBack, writeBackCells, patchSheet, unzipIndex, zipText, zipBuild, crc32, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
+G.Engine = { disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, writeBack, writeBackCells, distKm, patchSheet, unzipIndex, zipText, zipBuild, crc32, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
   util: { timeRange, hhmm, sd, serialOf, fmtD, wdD, mss, hms, r1, WD, WDL, tStart, RACE_TYPES, stageOf } };
 })(typeof window !== "undefined" ? window : globalThis);

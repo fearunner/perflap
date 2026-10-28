@@ -1,4 +1,4 @@
-/* Performance Lab 3.2. Oberfläche. Daten bleiben auf dem Gerät (IndexedDB) und in der Sync-Datei, die du selbst wählst.
+/* Triger 3.3 (vormals Performance Lab). Oberfläche. Daten bleiben auf dem Gerät (IndexedDB) und in der Sync-Datei, die du selbst wählst.
    Keine externen Requests, kein Tracking. Planlogik ausschließlich in engine.js. */
 (function () {
 "use strict";
@@ -60,18 +60,19 @@ const UI = { play: '<path d="M8 5.5v13l10.5-6.5z"/>', fork: '<path d="M7 3v8a2 2
   file: '<path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3v5h5"/>', down: '<path d="M12 4v12M7 11l5 5 5-5M5 20h14"/>', up: '<path d="M12 20V8M7 13l5-5 5 5M5 4h14"/>',
   shield: '<path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z"/>', sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/>',
   book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/>' };
+UI.sidebar = '<rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="M9.5 4.5v15M5.5 8h2M5.5 11h2"/>';
 const ui = (k, cls) => `<svg class="ico ${cls || ""}" viewBox="0 0 24 24" aria-hidden="true">${UI[k]}</svg>`;
 
 /* ---------- Zustand und Speicher ---------- */
 let B = null, ST = {}, PREF = { theme: "system" }, tab = "heute", planZoom = "woche", planWeek = null, planMonth = null, planDay = null, selId = null, LP = [], ALERT = "";
 let syncState = "off", syncMsg = "Nur auf diesem Gerät";
-const H = { sync: null };
+const H = { sync: null, xl: null, xlAt: 0, xlState: "off" };
 const dbP = new Promise((res, rej) => { const r = indexedDB.open("perflab-app", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 const idbGet = async k => { const db = await dbP; return new Promise(r => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => r(q.result); q.onerror = () => r(undefined); }); };
 const idbPut = async (k, v) => { const db = await dbP; return new Promise(r => { const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").put(v, k); tx.oncomplete = () => r(true); tx.onerror = () => r(false); }); };
 const idbDel = async k => { const db = await dbP; db.transaction("kv", "readwrite").objectStore("kv").delete(k); };
 let saveT = null;
-const saveState = () => { clearTimeout(saveT); saveT = setTimeout(() => idbPut("state", ST), 120); scheduleSync(); };
+const saveState = () => { clearTimeout(saveT); saveT = setTimeout(() => idbPut("state", ST), 120); scheduleSync(); scheduleXl(); };
 const get = k => E.val(ST, k);
 function put(k, v) { ST[k] = { v, t: Date.now() }; MEMO.k = null; saveState(); }
 function set(k, v) { put(k, v); render(); }
@@ -114,6 +115,7 @@ const SHEETS = [];
 /* Mac (ab 1000 px): Blätter erscheinen in der rechten Seitenleiste statt als Fenster. Stapel: oberstes Blatt sichtbar, Zurück schließt es. */
 function openSheet(render, opt) {
   opt = opt || {};
+  if (WIDE() && opt.side !== false && PREF.insp === false && B) { PREF.insp = true; idbPut("pref", PREF); doRender(); }
   if (WIDE() && opt.side !== false && $("#insp")) {
     const dummy = document.createElement("div");
     const S = { side: true, wrap: dummy, render, opt, prevFocus: document.activeElement, data: opt.data || {} };
@@ -229,12 +231,14 @@ function stmark(s, t) {
   const lab = st === "✓" ? "erledigt" : st === "½" ? "teilweise" : st === "✗" ? "verpasst" : st === "krank" ? "krank" : cl === "need" ? "offen" : "geplant";
   return `<span class="stmark ${cl}" aria-label="${lab}">${ic}</span>`;
 }
+/* Verpasste Einheit, die an einem anderen Tag nachgeholt wird (Klon mit ~ in der ID). */
+const nachOf = (c, s) => s && !s.added && !s.isFree ? c.Ex.find(y => y.added && !y.dropped && String(y.id).split("~")[0] === s.id) : null;
 function sessRow(s, c, opt) {
   opt = opt || {}; const t = c.t, st = s.isFree ? "✓" : E.statusOf(ST, s, t), l = s.isFree ? s : log(s);
   if (s.sport === "Ruhe" && !opt.showRest) return "";
   const S = sp(s.sport), a = s.isFree ? { km: s.km, min: s.min } : E.actual(ST, s, t), doneish = st === "✓" || st === "½";
   const amt = doneish ? (a.km ? kmStr(a.km, s.sport) : durShort(a.min)) : (s.km ? kmStr(s.km, s.sport) : s.min ? durShort(s.min) : "");
-  const sub = [opt.date ? U.wdD(s.date) : "", s.time ? s.time : "", doneish && a.km && a.min && s.sport === "Lauf" ? E.paceStr(a.min, a.km) + " /km" : "", doneish && num(l.hf) ? "Ø " + l.hf + " bpm" : "", doneish && num(l.rpe) ? "RPE " + l.rpe : "", s.dropped ? (s.note || "entfällt") : ""].filter(Boolean).join(" · ");
+  const sub = [opt.date ? U.wdD(s.date) : "", s.time ? s.time : "", doneish && a.km && a.min && s.sport === "Lauf" ? E.paceStr(a.min, a.km) + " /km" : "", doneish && num(l.hf) ? "Ø " + l.hf + " bpm" : "", doneish && num(l.rpe) ? "RPE " + l.rpe : "", s.dropped ? (s.note || "entfällt") : "", nachOf(c, s) ? "Nachgeholt am " + U.wdD(nachOf(c, s).date) : ""].filter(Boolean).join(" · ");
   const can = !s.isFree && !s.dropped && s.date <= t && E.isTrain(s) && st !== "krank" && !opt.noSwipe;
   const row = `<button class="row${st === "✓" ? " done" : ""}${s.dropped ? " dropped" : ""}${selId === s.id ? " sel" : ""}" data-act="sess" data-id="${esc(s.id)}" aria-label="${esc(s.name + ", " + (s.time || U.wdD(s.date)))}">
     <span class="badge-ic" style="--c:${S.c};--t:${S.t}">${icon(s.sport)}</span>
@@ -282,22 +286,16 @@ function briefing(c, h) {
   const nx = B.S.events.filter(e => e.date >= t).sort((a, b) => a.date - b.date)[0];
   const focus = s ? (wy ? wy.zweck.split(/[.:]/)[0] + "." : "") : "Schlaf, Essen und lockere Bewegung machen dich schneller.";
   const hard = s && E.isHard(s), headline = sickNow ? "Heute zählt Erholung" : !s ? (h ? "Ruhetag, morgen geht es weiter" : "Ruhetag") : ready.cls === "bad" ? "Heute nur locker" : s.test === "race" ? "Renntag. Vertrau deiner Vorbereitung" : s.test === "test" ? "Testtag: ausgeruht und gleichmäßig" : s.code === "LR" ? "Heute zählt Ausdauer" : s.code === "LRM" ? "Heute zählt Ausdauer mit Marathontempo" : hard ? "Heute zählt Qualität" : "Heute locker bleiben";
-  let x = `<section class="brief rise" aria-label="Coach-Briefing"><div class="br-top"><div><span class="br-k">${ui("sync")}Dein Coach</span><h2>${esc(headline)}</h2></div><button class="readyb ${ready.cls}" data-act="checkin" data-w="${c.cw}" aria-label="Bereitschaft ${esc(ready.lab)}, Check-in öffnen"><b>${esc(ready.lab)}</b><span>Form ${tsb > 0 ? "+" : ""}${Math.round(tsb)}</span></button></div>`;
-  x += `<p class="br-txt">${esc(focus)} ${esc(ready.txt)}</p>`;
-  x += `<div class="br-chips">`;
-  const mcR = E.morningReady(B, ST, t); x += `<button class="bchip${mcR ? "" : " cta"}" data-act="mc" data-v="${t}">${ui("sun")}<span>${mcR ? "Morgen-Check " + (mcR.cls === "ok" ? "grün" : mcR.cls === "warn" ? "gelb" : "rot") : "<b>Morgen-Check</b> machen"}</span></button>`;
-  if (N) x += `<button class="bchip" data-act="nut" data-v="${t}">${ui("fork")}<span><b>${N.khT} g</b> KH · ${N.pT} g Eiweiß</span></button>`; else x += `<button class="bchip" data-act="kg">${ui("fork")}<span>Ernährung: Gewicht eintragen</span></button>`;
-  if (s && (s.min >= 45 || s.test)) x += `<button class="bchip" data-act="fuel" data-id="${esc(s.id)}">${ui("fork")}<span>Verpflegung zur Einheit</span></button>`;
-  if (autoN) x += `<button class="bchip" data-tab="prof">${ui("sync")}<span>${autoN} Anpassung${autoN > 1 ? "en" : ""} diese Woche</span></button>`;
-  if (nx) x += `<span class="bchip static">${ui("flag")}<span><b>${nx.date - t}</b> Tage · ${esc(String(nx.name).replace("Olympische Distanz", "OD").replace(" Triathlon Classic", "").replace("Marathon ", ""))}</span></span>`;
-  x += `</div><button class="aibtn" data-act="ai">${ui("sync")}<span><b>KI-Coach fragen</b><small>${AION() ? "Nächste 14 Tage prüfen lassen" : "Optional: Plan von KI prüfen lassen"}</small></span>${ui("chev", "chev")}</button></section>`;
+  const mcR = E.morningReady(B, ST, t);
+  let x = `<section class="brief tri rise" aria-label="Triger, dein Coach"><img class="tri-av" src="triger.svg" alt=""><div class="tri-tx"><span class="tri-k">Triger</span><h2>${esc(headline)}</h2><p class="br-txt">${esc(focus)} ${esc(ready.txt)}</p></div><button class="readyb ${ready.cls}" data-act="checkin" data-w="${c.cw}" aria-label="Bereitschaft ${esc(ready.lab)}, Check-in öffnen"><b>${esc(ready.lab)}</b><span>Form ${tsb > 0 ? "+" : ""}${Math.round(tsb)}</span></button>
+    <div class="tri-acts">${mcR ? "" : `<button class="bchip cta" data-act="mc" data-v="${t}">${ui("sun")}<span><b>Morgen-Check</b> · 10 Sekunden</span></button>`}${s && (s.min >= 45 || s.test) ? `<button class="bchip" data-act="fuel" data-id="${esc(s.id)}">${ui("fork")}<span>Verpflegung</span></button>` : ""}<button class="bchip" data-act="ai">${ui("sync")}<span>KI-Coach</span></button></div></section>`;
   return x;
 }
 function vHeute(c) {
   const t = c.t, h = heroPick(c), v = verdict(c.cw), sick = get("sick"), sickNow = sick && num(sick.from) && !num(sick.to);
   LP = c.P;
   const open = c.Ex.filter(s => s.date < t && s.date >= t - 14 && needs(s, t) && !s.dropped);
-  let x = `<header class="lt"><div><div class="eyebrow">${esc(longDate(t))}${c.pre ? " · Start in " + (B.S.start - t) + " Tagen" : " · Woche " + c.cw + " von " + c.NW}</div><h1>Übersicht</h1></div><div class="acts">${syncPill()}</div></header>`;
+  let x = `<header class="lt"><div><div class="eyebrow">${esc(longDate(t))}${c.pre ? " · Start in " + (B.S.start - t) + " Tagen" : " · Woche " + c.cw + " von " + c.NW}</div><h1>Übersicht</h1></div><div class="acts"><button class="avatar" data-tab="prof" aria-label="Profil"><img src="triger.svg" alt=""></button></div></header>`;
   x += banners();
   if (sickNow) { const sc = E.SICK_CAT[sick.cat], hals = sick.cat === "hals", inj = sick.cat === "verletzung" && E.REGIONS[sick.region];
     x += `<div class="banner ${hals ? "" : "err"}">${ui("sick")}<div class="tx"><b>${esc(sc ? sc.short : "Krank")} seit ${esc(U.wdD(sick.from))}</b> ${hals ? "Nur locker, höchstens 45 Minuten." : inj ? "Pausiert: " + esc(inj.aff.join(", ")) + ". Rest nur schmerzfrei." : "Kein Training, nichts zählt als verpasst."}</div><span class="bt" style="display:flex;gap:6px">${sc ? "" : `<button class="btn sm ghost" data-act="sick">Details</button>`}<button class="btn sm" data-act="sickend">Wieder gesund</button></span></div>`; }
@@ -316,48 +314,70 @@ function vHeute(c) {
   // Offene Einträge
   if (open.length) x += `<div class="openbar"><div class="tx"><b>${open.length} ${open.length === 1 ? "Einheit" : "Einheiten"} offen</b><span>${esc(open.slice(0, 3).map(s => U.WD[U.sd(s.date).getUTCDay()] + " " + s.name.replace(/^★\s*/, "")).join(", "))}${open.length > 3 ? " …" : ""}</span></div><span class="bt"><button class="btn sm" data-act="review">Ansehen</button><button class="btn sm ink" data-act="allok">${ui("check")}Alle erledigt</button></span></div>`;
   // Coach: automatische Anpassungen, danach offene Vorschläge
-  x += coachCards(c);
+  const cc = coachCards(c), ccN = (cc.match(/class="prop auto/g) || []).length;
+  if (ccN) x += fold("heute:Plan angepasst", "Triger hat deinen Plan angepasst", ccN + " neu", cc, { ic: ["sync", "var(--tartan)"], cls: "hot" });
   x += LP.map((p, i) => propCard(p, i, "")).join("");
   x += dashGrid(c, h);
   return x;
 }
 
 
-/* ---------- v3.2 Dashboard-Kacheln ---------- */
+/* ---------- v3.3 Einklappbare Gruppen (wie iOS-Einstellungen). Zustand lokal in PREF.fold, nie im Sync. ---------- */
+const FOLD_DEF = { "heute:Nächste 7 Tage": true, "fort:Disziplinen": true, "daten:Aktivitäten": true };
+const foldOpen = (id, first) => { const f = PREF.fold || {}; return id in f ? !!f[id] : id in FOLD_DEF ? FOLD_DEF[id] : !!first && !/^prof:/.test(id); };
+function fold(id, title, sum, body, opt) { opt = opt || {}; const o = foldOpen(id, opt.first);
+  return `<section class="fold${o ? " open" : ""} ${opt.cls || ""}" data-fold="${esc(id)}"><button class="fold-h" data-act="fold" data-v="${esc(id)}" aria-expanded="${o}">${opt.ic ? `<span class="fic" style="--c:${opt.ic[1]}">${opt.ic[0].length > 12 ? opt.ic[0] : ui(opt.ic[0])}</span>` : ""}<span class="fold-t">${esc(title)}</span><span class="fold-s">${sum || ""}</span>${ui("chev", "fold-c")}</button><div class="fold-b"><div class="fold-i">${body}</div></div></section>`; }
+/* Seiten mit .sec-Überschriften (Leistung, Daten, Profil) werden nachträglich zu Gruppen. */
+function foldify(root) {
+  if (!root || tab === "plan" || tab === "heute") return;
+  const secs = [...root.children].filter(n => n.classList.contains("sec"));
+  secs.forEach((h, i) => { const t = (h.querySelector("h2") || h).textContent.trim(), id = tab + ":" + t, o = foldOpen(id, i === 0);
+    const sumEl = [...h.children].find(n => n.tagName !== "H2"); const sum = sumEl ? sumEl.outerHTML : "";
+    const sec = document.createElement("section"); sec.className = "fold" + (o ? " open" : ""); sec.dataset.fold = id;
+    sec.innerHTML = `<button class="fold-h" data-act="fold" data-v="${esc(id)}" aria-expanded="${o}"><span class="fold-t">${esc(t)}</span><span class="fold-s">${sumEl && !sumEl.matches("button,a") ? sumEl.innerHTML : ""}</span>${ui("chev", "fold-c")}</button><div class="fold-b"><div class="fold-i"></div></div>`;
+    const inner = sec.querySelector(".fold-i"); if (sumEl && sumEl.matches("button,a")) inner.appendChild(sumEl);
+    let n = h.nextElementSibling; while (n && !n.classList.contains("sec") && !n.classList.contains("nofold")) { const nx = n.nextElementSibling; inner.appendChild(n); n = nx; }
+    h.replaceWith(sec); });
+}
+function toggleFold(id) { PREF.fold = Object.assign({}, PREF.fold || {}); const el = document.querySelector(`.fold[data-fold="${CSS.escape(id)}"]`); const o = el ? !el.classList.contains("open") : !foldOpen(id); PREF.fold[id] = o; idbPut("pref", PREF);
+  if (el) { el.classList.toggle("open", o); const b = el.querySelector(".fold-h"); if (b) b.setAttribute("aria-expanded", o); } buzz(3); }
+
+/* ---------- v3.2 Dashboard-Kacheln (3.3: als Gruppen) ---------- */
 function dashGrid(c, h) {
   const t = c.t, v = verdict(c.cw), W = c.WS.weeks[c.cw - 1] || { so: 0, is: 0, keyTot: 0, keyDone: 0, sp: {} }, kg = KG();
-  const tile = (cls, head, body, act) => `<section class="tile ${cls}">${head ? `<div class="tl-h">${head}${act || ""}</div>` : ""}${body}</section>`;
+  const tile = (cls, head, body, act, sum, ic) => { const title = head.replace(/<[^>]+>/g, ""); return fold("heute:" + title.replace(/ \d+$/, ""), title, sum || "", body + (act ? `<div class="fold-more">${act}</div>` : ""), { cls, ic }); };
   let g = "";
   // Nächste 7 Tage
   let up = ""; for (let d = t; d < t + 7; d++) { const it = dayItems(c, d).filter(s => s.sport !== "Ruhe" && !s.dropped), ab = E.absOn(ST, d, t);
     up += `<div class="up-d${d === t ? " today" : ""}"><button class="up-day" data-act="mday" data-v="${d}"><b>${esc(U.WD[U.sd(d).getUTCDay()])}</b><span>${U.sd(d).getUTCDate()}.</span></button><div class="up-it">${ab.map(a => `<span class="abpill ab-${a.kind}">${esc(E.ABS_KIND[a.kind].lab)}</span>`).join("")}${it.length ? it.map(s => { const st = s.isFree ? "✓" : E.statusOf(ST, s, t); return `<button class="up-s" data-act="sess" data-id="${esc(s.id)}" style="--c:${sp(s.sport).c}"><i></i><span>${esc(s.name.replace(/^★\s*/, ""))}</span><small>${esc(s.km ? kmStr(s.km, s.sport) : durShort(s.min))}${st === "✓" ? " ✓" : st === "✗" ? " ✗" : ""}</small></button>`; }).join("") : ab.length ? "" : `<span class="muted" style="font-size:.8125rem">Ruhetag</span>`}</div></div>`; }
-  g += tile("t-up", `<h3>Nächste 7 Tage</h3>`, `<div class="up">${up}</div>`, `<button class="lnk" data-tab="plan">Plan ${ui("chev")}</button>`);
+  const n7 = (() => { let n = 0; for (let d = t; d < t + 7; d++) n += dayItems(c, d).filter(s => E.isTrain(s) && !s.dropped).length; return n; })();
+  g += tile("t-up", `<h3>Nächste 7 Tage</h3>`, `<div class="up">${up}</div>`, `<button class="lnk" data-tab="plan">Ganzer Plan ${ui("chev")}</button>`, n7 + " Einheiten", ["cal", "var(--lane)"]);
   // Woche
   const kv = (lab, col, a, b, u) => `<div class="k"><span><i style="--c:${col}"></i>${lab}</span><b>${a}<small> / ${b}${u}</small></b></div>`;
-  g += tile("t-week", `<h3>Woche ${c.cw}</h3>`, `<div class="trackcard flat">${trackSvg(W.so ? W.is / W.so : 0, W.keyTot ? W.keyDone / W.keyTot : 0, "Woche")}<div class="tstat">${kv("Stunden", "var(--tartan)", de(W.is / 60), de(W.so / 60), " h")}${kv("Schlüssel", "var(--gold-s)", W.keyDone, W.keyTot, "")}<button class="light ${v.cls}" data-act="checkin" data-w="${c.cw}"><i></i><span>${esc(v.txt)}</span></button></div></div>
-    <div class="spl">${["Lauf", "Rad", "Schwimmen"].map(k => { const z = W.sp[k] || { km: 0, kmIs: 0 }; return `<span style="--c:${sp(k).c}">${icon(k)}${de(z.kmIs)}<small>/${de(z.km)} km</small></span>`; }).join("")}</div>`);
+  g += tile("t-week", `<h3>Diese Woche</h3>`, `<div class="trackcard flat">${trackSvg(W.so ? W.is / W.so : 0, W.keyTot ? W.keyDone / W.keyTot : 0, "Woche")}<div class="tstat">${kv("Stunden", "var(--tartan)", de(W.is / 60), de(W.so / 60), " h")}${kv("Schlüssel", "var(--gold-s)", W.keyDone, W.keyTot, "")}<button class="light ${v.cls}" data-act="checkin" data-w="${c.cw}"><i></i><span>${esc(v.txt)}</span></button></div></div>
+    <div class="spl">${["Lauf", "Rad", "Schwimmen"].map(k => { const z = W.sp[k] || { km: 0, kmIs: 0 }; return `<span style="--c:${sp(k).c}">${icon(k)}${de(z.kmIs)}<small>/${de(z.km)} km</small></span>`; }).join("")}</div>`, "", Math.round(W.so ? W.is / W.so * 100 : 0) + " % · " + W.keyDone + "/" + W.keyTot + " Schlüssel", ["target", "var(--tartan)"]);
   // Ernährung + Tagebuch
   const N = kg ? E.dayNeeds(E.dayType(c.Ex, ST, t), kg) : null, fd = get("fd:" + t) || {}, filled = MEALS.slice(0, 4).filter(([k]) => (fd[k] || "").trim()).length;
-  g += tile("t-food", `<h3>Ernährung heute</h3>`, N ? `<div class="food-n"><button data-act="nut" data-v="${t}"><b>${N.khT}<small> g</small></b><span>Kohlenhydrate · ${esc(N.lab)}</span></button><button data-act="nut" data-v="${t}"><b>${N.pT}<small> g</small></b><span>Eiweiß</span></button></div>
+  g += tile("t-food", `<h3>Ernährung</h3>`, N ? `<div class="food-n"><button data-act="nut" data-v="${t}"><b>${N.khT}<small> g</small></b><span>Kohlenhydrate · ${esc(N.lab)}</span></button><button data-act="nut" data-v="${t}"><b>${N.pT}<small> g</small></b><span>Eiweiß</span></button></div>
     <div class="meals">${MEALS.slice(0, 4).map(([k, lab]) => `<button class="meal${(fd[k] || "").trim() ? " on" : ""}" data-act="fd" data-v="${t}"><b>${esc(lab)}</b><span>${esc((fd[k] || "").trim() || "eintragen")}</span></button>`).join("")}</div><p class="note">${filled}/4 Mahlzeiten notiert · fließt ins Wochen-Review</p>`
-    : `<button class="btn wide" data-act="kg">${ui("fork")}Gewicht eintragen für Ernährungsziele</button>`, `<button class="lnk" data-act="fd" data-v="${t}">Tagebuch ${ui("chev")}</button>`);
+    : `<button class="btn wide" data-act="kg">${ui("fork")}Gewicht eintragen für Ernährungsziele</button>`, `<button class="lnk" data-act="fd" data-v="${t}">Tagebuch ${ui("chev")}</button>`, N ? N.khT + " g KH · " + filled + "/4 notiert" : "Gewicht fehlt", ["fork", "var(--ok)"]);
   // Körper: Morgen-Check + Gewicht
   const R0 = E.morningReady(B, ST, t), WT = E.weightTrend(ST, t);
   g += tile("t-body", `<h3>Körper</h3>`, `<div class="body2"><button class="bodyb ${R0 ? R0.cls : ""}" data-act="mc" data-v="${t}"><span>Morgen-Check</span><b>${R0 ? (R0.cls === "ok" ? "Bereit" : R0.cls === "warn" ? "Gelb" : "Rot") : "Offen"}</b><small>${esc(R0 ? R0.why : "10 Sekunden, steuert den Plan")}</small></button>
-    <button class="bodyb" data-act="wt"><span>Gewicht (Trend)</span><b>${WT ? de(WT.cur) + " kg" : kg ? de(kg) + " kg" : "–"}</b><small>${WT && WT.n >= 3 ? (WT.wk > 0 ? "+" : "") + de(WT.wk, 2) + " kg/Woche" : "Verlauf ab 3 Werten"}</small></button></div>`);
+    <button class="bodyb" data-act="wt"><span>Gewicht (Trend)</span><b>${WT ? de(WT.cur) + " kg" : kg ? de(kg) + " kg" : "–"}</b><small>${WT && WT.n >= 3 ? (WT.wk > 0 ? "+" : "") + de(WT.wk, 2) + " kg/Woche" : "Verlauf ab 3 Werten"}</small></button></div>`, "", R0 ? (R0.cls === "ok" ? "Bereit" : R0.cls === "warn" ? "Gelb" : "Rot") : "Morgen-Check offen", ["heart", "var(--bad)"]);
   // Fortschritt alle Disziplinen
   const D = E.disciplines(B, ST, t, c.Ex), ic = { hm: "Lauf", m: "Lauf", swim: "Schwimmen", bike: "Rad", od: "Triathlon", md: "Triathlon" };
-  g += tile("t-prog", `<h3>Fortschritt</h3>`, `<div class="dmini">${D.filter(d => ["hm", "m", "swim", "bike", "md"].includes(d.key)).map(d => { const ok = d.gap != null && d.gap <= 0; return `<button class="dm" data-act="discgo" data-v="${d.key}"><span style="color:${sp(ic[d.key]).c}">${icon(ic[d.key])}</span><span class="dm-t"><b>${esc(d.lab)}</b><small>${esc(d.curTxt)}</small></span><span class="dm-g ${d.gap == null ? "" : ok ? "ok" : "warn"}">${esc(d.goalTxt || (d.goal ? U.hms(d.goal).replace(/:00$/, "") : ""))}</span></button>`; }).join("")}</div>`, `<button class="lnk" data-tab="fort">Leistung ${ui("chev")}</button>`);
+  g += tile("t-prog", `<h3>Fortschritt</h3>`, `<div class="dmini">${D.filter(d => ["hm", "m", "swim", "bike", "md"].includes(d.key)).map(d => { const ok = d.gap != null && d.gap <= 0; return `<button class="dm" data-act="discgo" data-v="${d.key}"><span style="color:${sp(ic[d.key]).c}">${icon(ic[d.key])}</span><span class="dm-t"><b>${esc(d.lab)}</b><small>${esc(d.curTxt)}</small></span><span class="dm-g ${d.gap == null ? "" : ok ? "ok" : "warn"}">${esc(d.goalTxt || (d.goal ? U.hms(d.goal).replace(/:00$/, "") : ""))}</span></button>`; }).join("")}</div>`, `<button class="lnk" data-tab="fort">Leistung ${ui("chev")}</button>`, (D.find(d => d.key === "hm") || {}).curTxt ? "HM " + D.find(d => d.key === "hm").curTxt : "", ["prog", "var(--other)"]);
   // Abwesenheiten + Rennen
   const A = E.absences(ST, t).filter(a => (a.to != null ? a.to : t) >= t).slice(0, 3), fut = B.S.events.filter(e => e.date >= t).sort((a, b) => a.date - b.date);
   g += tile("t-abs", `<h3>Termine</h3>`, `<div class="cd" role="list">${fut.map((e, i) => `<div class="it${i ? "" : " first"}" role="listitem"><b>${e.date - t}</b><span>Tage · ${esc(String(e.name).replace("Olympische Distanz", "OD").replace("Triathlon Classic", "").replace("Marathon ", ""))}</span></div>`).join("")}</div>
-    <div class="grp" style="margin-top:10px">${A.map(a => `<button class="row" data-act="abs"><span class="badge-ic" style="--c:var(--${a.kind === "krank" ? "bad" : a.kind === "urlaub" ? "gold-s" : "lane"});--t:var(--${a.kind === "krank" ? "bad-t" : a.kind === "urlaub" ? "gold" : "lane-t"})">${ui(a.kind === "krank" ? "sick" : "plane")}</span><span class="tx"><span class="t1">${esc(absLabel(a))}</span><span class="t2">${esc(absRange(a, t))}</span></span>${ui("chev", "chev")}</button>`).join("")}<button class="row" data-act="abs"><span class="badge-ic" style="--c:var(--lane);--t:var(--lane-t)">${ui("plus")}</span><span class="tx"><span class="t1">Abwesenheit eintragen</span><span class="t2">Krank, Dienstreise, Urlaub</span></span></button></div>`);
+    <div class="grp" style="margin-top:10px">${A.map(a => `<button class="row" data-act="abs"><span class="badge-ic" style="--c:var(--${a.kind === "krank" ? "bad" : a.kind === "urlaub" ? "gold-s" : "lane"});--t:var(--${a.kind === "krank" ? "bad-t" : a.kind === "urlaub" ? "gold" : "lane-t"})">${ui(a.kind === "krank" ? "sick" : "plane")}</span><span class="tx"><span class="t1">${esc(absLabel(a))}</span><span class="t2">${esc(absRange(a, t))}</span></span>${ui("chev", "chev")}</button>`).join("")}<button class="row" data-act="abs"><span class="badge-ic" style="--c:var(--lane);--t:var(--lane-t)">${ui("plus")}</span><span class="tx"><span class="t1">Abwesenheit eintragen</span><span class="t2">Krank, Dienstreise, Urlaub</span></span></button></div>`, "", fut.length ? (fut[0].date - t) + " Tage bis " + String(fut[0].name).replace("Marathon ", "").replace("HM Frankfurt", "HM") : "", ["flag", "var(--gold-s)"]);
   // Nächster Test
   const nt = testGroups().filter(T => !U.RACE_TYPES.includes(T.typ)).map(T => Object.assign(T, { ed: testDate(T) })).filter(T => T.ed >= t && !testDone(T)).sort((a, b) => a.ed - b.ed)[0];
-  if (nt) g += tile("t-test", `<h3>Nächster Test</h3>`, `<button class="row" data-act="test" data-k="${esc(nt.key)}" style="border-radius:12px"><span class="badge-ic" style="--c:var(--tartan);--t:var(--tartan-t)">${ui("star")}</span><span class="tx"><span class="t1">${esc(nt.name.replace(/:? ?400 m/, ""))}</span><span class="t2" style="white-space:normal">${esc(nt.how)}</span></span><span class="rv">${nt.ed - t === 0 ? "heute" : nt.ed - t}<small>${nt.ed - t === 0 ? "" : nt.ed - t === 1 ? "Tag" : "Tage"}</small></span></button>`);
+  if (nt) g += tile("t-test", `<h3>Nächster Test</h3>`, `<button class="row" data-act="test" data-k="${esc(nt.key)}" style="border-radius:12px"><span class="badge-ic" style="--c:var(--tartan);--t:var(--tartan-t)">${ui("star")}</span><span class="tx"><span class="t1">${esc(nt.name.replace(/:? ?400 m/, ""))}</span><span class="t2" style="white-space:normal">${esc(nt.how)}</span></span><span class="rv">${nt.ed - t === 0 ? "heute" : nt.ed - t}<small>${nt.ed - t === 0 ? "" : nt.ed - t === 1 ? "Tag" : "Tage"}</small></span></button>`, "", nt.ed - t === 0 ? "heute" : "in " + (nt.ed - t) + " Tagen", ["star", "var(--tartan)"]);
   // Sonntag: Check-in fällig
   const chk = get("chk:" + c.cw), due = !c.pre && U.sd(t).getUTCDay() === 0 && !(chk && num(chk.puls));
-  return (due ? `<div class="prop" style="border-left-color:var(--gold-s)"><span class="k" style="color:var(--gold-ink)">${ui("heart")}Sonntag</span><h3>Check-in für Woche ${c.cw}</h3><p>Ruhepuls, Schmerz, Gefühl und dein Garmin-VO2max. Dauert 30 Sekunden und steuert die Ampel.</p><div class="acts"><button class="btn sm pri" data-act="checkin" data-w="${c.cw}">Check-in starten</button></div></div>` : "") + `<div class="dash">${g}</div>`;
+  return (due ? `<div class="prop" style="border-left-color:var(--gold-s)"><span class="k" style="color:var(--gold-ink)">${ui("heart")}Sonntag</span><h3>Check-in für Woche ${c.cw}</h3><p>Ruhepuls, Schmerz, Gefühl und dein Garmin-VO2max. Dauert 30 Sekunden und steuert die Ampel.</p><div class="acts"><button class="btn sm pri" data-act="checkin" data-w="${c.cw}">Check-in starten</button></div></div>` : "") + `<div class="folds">${g}</div>`;
 }
 /* ---------- Video: Vorschau, Einbettung erst nach Tippen ---------- */
 function vidCard(key, lab) { const v = Library.VIDEOS[key]; if (!v) return ""; return `<button class="vthumb wide" data-act="vplay" data-v="${esc(v.id)}" aria-label="Video abspielen: ${esc(v.t)}"><span class="vt-ic">${ui("play")}</span><span><b>${esc(lab)}</b><small>Video · ${esc(v.c)}</small></span></button>`; }
@@ -385,6 +405,7 @@ function sessView(id, D) {
   if (st === "✗") x += `<div class="grp" style="margin-bottom:12px"><div class="row plain"><span class="stmark miss">${ui("x")}</span><span class="tx"><span class="t1">Verpasst</span><span class="t2">${esc({ zeit: "Keine Zeit", muede: "Müde oder Schmerz", krank: "Krank", reise: "Reise" }[l.why] || "Grund offen")}</span></span><button class="btn sm" data-act="mode" data-v="miss">Ändern</button></div></div>`;
   if (s.orig) x += `<div class="banner info">${ui("info")}<div class="tx">Angepasst. Ursprünglich ${esc(s.orig.name)}${s.orig.km ? ", " + de(s.orig.km) + " km" : s.orig.min ? ", " + s.orig.min + " min" : ""}.${s.note ? " " + esc(s.note) : ""}</div></div>`;
   if (s.movedFrom) x += `<div class="banner info">${ui("move")}<div class="tx">Verschoben von ${esc(U.wdD(s.movedFrom))}.</div></div>`;
+  const nach = nachOf(c, s); if (nach) x += `<div class="banner info">${ui("move")}<div class="tx">Nachgeholt am ${esc(U.wdD(nach.date))}${nach.time ? " · " + esc(nach.time) : ""}. Ergebnis wird dort eingetragen und landet beim Zurückschreiben in dieser Excel-Zeile.</div><button class="btn sm" data-act="sess" data-id="${esc(nach.id)}">Öffnen</button></div>`;
   const spk = !s.dropped && E.lrSpike(c.Ex, s); if (spk) x += `<div class="banner">${ui("info")}<div class="tx">Geplanter Sprung: +${Math.round(spk.pct * 100)} % zum längsten Lauf der 30 Tage davor (${de(spk.ref)} km). Ab 10 % steigt laut Studie das Überlastungsrisiko.</div>${infoBtn("lrspike")}</div>`;
   // Warum: sichtbar als Coach-Notiz, Quellen aufklappbar
   if (wy) x += `<div class="coachnote"><div class="cn-h">${ui("book")}<b>${esc(wy.t)}: darum geht es</b><span class="ev ev${wy.ev}" title="${esc(E.EV_LAB[wy.ev])}">${wy.ev}</span></div><p>${esc(wy.zweck)}</p><p class="dos"><b>So läufst du richtig:</b> ${esc(wy.dos)}</p>${wy.hint ? `<p class="hint">${esc(wy.hint)}</p>` : ""}<details><summary>Evidenz und Quellen</summary><p class="note">${esc(E.EV_LAB[wy.ev])}.</p><ul class="srcl">${wy.src.map(k => `<li>${esc(E.SRC[k])}</li>`).join("")}</ul></details></div>`;
@@ -770,6 +791,7 @@ function vProg(c) {
     <button class="kpi" data-act="vo2"><span class="info">${ui("plus")}</span><div class="kl">VO2max</div><div class="kv">${lastVo2 ? lastVo2.v : "–"}${lastVd ? `<small> · VDOT ${de(lastVd.v)}</small>` : ""}</div><div class="ks">Ziel Linz VDOT ${de(tg.m)}</div></button>
     <button class="kpi" data-act="info" data-v="prog"><span class="info">${ui("info")}</span><div class="kl">Prognose Marathon</div><div class="kv">${U.hms(R.prog).replace(/:\d\d$/, "")}</div><div class="ks ${R.prog <= B.S.tgtM ? "ok" : R.prog - B.S.tgtM < 6 / 1440 ? "warn" : ""}">Ziel ${U.hms(B.S.tgtM).replace(/:\d\d$/, "")}</div></button></div>`;
   x += perfBlock(c);
+  x += `<div class="sec"><h2>Form und VO2max</h2></div>`;
   // Formkurve
   const x0 = progRange === "8w" ? t - 42 : B.S.start, x1 = progRange === "8w" ? t + 14 : F[F.length - 1].d;
   const FF = F.filter(p => p.d >= x0 && p.d <= x1), past = FF.filter(p => !p.proj), proj = FF.filter(p => p.proj || p.d === t - 1);
@@ -955,7 +977,7 @@ function vProf(c) {
   const sick = get("sick"), sickNow = sick && num(sick.from) && !num(sick.to), standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone, ios = /iPhone|iPad/.test(navigator.userAgent);
   const row = (ic, col, t1, t2, act, extra) => `<button class="row" data-act="${act}" ${extra || ""}><span class="badge-ic" style="--c:${col};--t:color-mix(in srgb,${col} 14%,var(--surface))">${ui(ic)}</span><span class="tx"><span class="t1">${t1}</span>${t2 ? `<span class="t2">${t2}</span>` : ""}</span>${ui("chev", "chev")}</button>`;
   let x = `<header class="lt"><div><div class="eyebrow">Einstellungen und Daten</div><h1>Profil</h1></div></header>`;
-  x += `<div class="prof-hero"><span class="av">PL</span><div class="tx" style="flex:1"><b style="font-size:1.0625rem">Saison 2026/27</b><div class="muted" style="font-size:.8125rem">${B.plan.length} Einheiten · Plan vom ${new Date(B.importedAt).toLocaleDateString("de-DE")}</div></div>${syncPill()}</div>`;
+  x += `<div class="prof-hero"><span class="av tiger"><img src="triger.svg" alt=""></span><div class="tx" style="flex:1"><b style="font-size:1.0625rem">Saison 2026/27</b><div class="muted" style="font-size:.8125rem">${B.plan.length} Einheiten · Plan vom ${new Date(B.importedAt).toLocaleDateString("de-DE")}</div></div>${syncPill()}</div>`;
   if (!standalone) x += `<div class="banner info" style="margin-top:12px">${ui("down")}<div class="tx"><b>Als App installieren.</b> ${ios ? "Safari: Teilen, dann Zum Home-Bildschirm." : "Chrome: Menü ⋮, Speichern und teilen, Seite als App installieren."}</div></div>`;
   const absN = E.absences(ST, c.t).filter(a => (a.to != null ? a.to : c.t) >= c.t).length;
   x += `<div class="sec"><h2>Unterwegs und krank</h2></div><div class="grp">${row("cal", "var(--lane)", "Alle Abwesenheiten", absN ? absN + " aktuell oder geplant" : "Liste, bearbeiten, löschen", "abs")}${row("plane", "var(--lane)", "Reise eintragen", trv.length ? trv.map(([, v]) => U.fmtD(v.from) + "–" + U.fmtD(v.to) + (v.eq ? " (" + E.eqText(E.tripEq(v)) + ")" : "")).join(", ") : "Dienstreise mit Ausstattung, Ersatzeinheiten", "travel")}
@@ -968,7 +990,7 @@ function vProf(c) {
   x += `<div class="sec"><h2>Ernährung</h2></div><div class="grp">${row("fork", "var(--ok)", "Körpergewicht", KG() ? de(KG()) + " kg" : "Noch nicht eingetragen", "kg")}${row("fork", "var(--ok)", "Ernährung heute", "Tagesbedarf und Beispielmahlzeiten", "nut", `data-v="${c.t}"`)}${linz ? row("flag", "var(--gold-s)", "Verpflegungsplan " + esc(linz.name.replace(/^★\s*/, "").replace(/^Marathon\s*/, "")), "Gel- und Trinkplan für das Rennen", "fuel", `data-id="${esc(linz.id)}"`) : ""}${row("book", "var(--ok)", "Ernährung: Quellen", "ACSM, IOC, ISSN", "info", 'data-v="food"')}</div>`;
   x += `<div class="sec"><h2>Mac und iPhone</h2></div><div class="grp">${FSA ? (H.sync ? row("sync", "var(--ok)", "Jetzt abgleichen", esc(syncMsg + " · " + H.sync.name), "syncnow") + row("x", "var(--mute)", "Sync trennen", "Datei bleibt erhalten", "syncoff") : row("sync", "var(--lane)", "Sync-Datei anlegen", "Einmal in iCloud Drive speichern, danach automatisch", "synccreate") + row("file", "var(--lane)", "Vorhandene Sync-Datei wählen", "", "syncopen"))
     : row("down", "var(--lane)", "Stand laden", "Sync-Datei aus iCloud Drive öffnen", "loadjson") + row("up", "var(--lane)", "Stand sichern", "In Dateien sichern und ersetzen", "sharejson")}</div>`;
-  x += `<div class="sec"><h2>Export</h2></div><div class="grp">${row("cal", "var(--tartan)", "Kalender (.ics)", "Ab heute, inklusive Anpassungen", "ics")}${row("file", "var(--ok)", "Zurück ins Excel schreiben", get("set:lastwb") ? "Zuletzt " + new Date(get("set:lastwb").at).toLocaleDateString("de-DE") + ", ersetzt Trainingsplan_2026-2027.xlsx" : "Status, Ist-Werte, Anpassungen, Check-ins, Tests", "wb")}${row("file", "var(--ok)", "Excel-Protokoll", "Für das Review mit Claude", "xlsx")}${row("up", "var(--mute)", "Sicherung speichern", "Kompletter Stand als Datei", "sharejson")}${row("down", "var(--mute)", "Sicherung laden", "", "loadjson")}</div>`;
+  x += `<div class="sec"><h2>Export</h2></div><div class="grp">${row("cal", "var(--tartan)", "Kalender (.ics)", "Ab heute, inklusive Anpassungen", "ics")}${H.xl ? row("file", "var(--ok)", "Excel verbunden: " + H.xl.name, xlLine(), "wb") + row("x", "var(--mute)", "Verbindung trennen", "Die Datei bleibt, wie sie ist", "xloff") : XL_OK ? row("file", "var(--ok)", "Excel verbinden", "Einmal die Datei im Ordner wählen, danach speichert die App selbst", "xlpick") : ""}${H.xl ? "" : row("file", "var(--ok)", "Zurück ins Excel schreiben", get("set:lastwb") ? "Zuletzt " + new Date(get("set:lastwb").at).toLocaleDateString("de-DE") + " · danach alte Datei im Ordner ersetzen" : "Lädt die aktualisierte Datei herunter, alte im Ordner ersetzen", "wb")}${row("file", "var(--mute)", "Protokoll als eigene Datei", "Nur zum Ansehen, ändert den Plan nicht", "xlsx")}${row("up", "var(--mute)", "Sicherung speichern", "Kompletter Stand als Datei", "sharejson")}${row("down", "var(--mute)", "Sicherung laden", "", "loadjson")}</div>`;
   x += `<div class="sec"><h2>Darstellung</h2></div><div class="grp"><div class="row plain"><span class="badge-ic" style="--c:var(--gold-s);--t:var(--gold)">${ui("sun")}</span><span class="tx"><span class="t1">Erscheinungsbild</span></span><div class="seg" style="width:220px">${[["system", "Auto"], ["light", "Hell"], ["dark", "Dunkel"]].map(([k, l]) => `<button data-act="theme" data-v="${k}" aria-pressed="${PREF.theme === k}">${l}</button>`).join("")}</div></div></div>`;
   x += `<div class="sec"><h2>Plan</h2></div><div class="grp">${row("file", "var(--ink2)", "Neuen Plan laden", "Excel wählen, Einträge bleiben erhalten", "loadxlsx")}${row("book", "var(--ink2)", "Wie die App anpasst", "Regeln und Quellen", "rules")}${row("trash", "var(--bad)", "Alle Daten löschen", "Nur auf diesem Gerät", "reset")}</div>`;
   x += `<p class="note" style="display:flex;gap:8px;margin-top:16px">${ui("shield")}<span>Plan und Einträge liegen nur auf deinen Geräten und in der Sync-Datei, die du selbst wählst. Die App sendet nichts an Server. Empfehlungen folgen festen Trainingsregeln und ersetzen keine ärztliche Abklärung.</span></p>`;
@@ -1040,14 +1062,41 @@ function sickSheet(D) {
 
 /* ---------- Willkommen ---------- */
 function vWelcome() {
-  return `<main class="welcome"><img class="logo" src="icon-192.png" alt=""><h1>Performance Lab</h1><p class="lead">Dein Trainingsplan als App. Abhaken mit einem Tipp, echte Werte eintragen, Formkurve und VO2max im Blick. Verpasst du etwas, passt sich der Plan an.</p>
+  return `<main class="welcome"><img class="logo tiger" src="triger.svg" alt=""><h1>Triger</h1><p class="lead">Stark in drei Disziplinen. Dein Plan bis Linz und ins Allgäu: abhaken mit einem Tipp, und verpasst du etwas, plant Triger neu.</p>
    ${ALERT ? `<div class="banner err">${ui("info")}<div class="tx">${esc(ALERT)}</div></div>` : ""}
    <div class="steps"><div><b>1</b><span>Trainingsplan (Excel) laden</span></div><div><b>2</b><span>Unter Profil eine Sync-Datei in iCloud Drive anlegen</span></div><div><b>3</b><span>Auf dem iPhone dieselbe Sync-Datei laden</span></div></div>
    <div class="acts"><button class="btn pri wide" data-act="loadxlsx">Trainingsplan laden</button><button class="btn wide" data-act="loadjson">Sync-Datei oder Sicherung laden</button>${FSA ? '<button class="btn ghost wide" data-act="syncopen">Sync-Datei verbinden</button>' : ""}</div>
    <p class="fine">${ui("shield")}<span>Deine Daten bleiben auf dem Gerät. Die App sendet nichts an Server.</span></p></main>`;
 }
 /* ---------- Import, Sync, Export ---------- */
+/* v3.3: Excel direkt verbinden (Chrome/Edge am Mac). Die App schreibt nach Änderungen selbst in die Datei im Ordner. */
+const XL_OK = typeof window !== "undefined" && "showOpenFilePicker" in window;
+let xlTimer = null;
+function scheduleXl() { if (!H.xl) return; clearTimeout(xlTimer); xlTimer = setTimeout(() => xlWrite(false), 4000); }
+async function xlPick() {
+  try { const [h] = await showOpenFilePicker({ types: [{ description: "Trainingsplan", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
+    if ((await h.requestPermission({ mode: "readwrite" })) !== "granted") return;
+    const buf = new Uint8Array(await (await h.getFile()).arrayBuffer()); const nb = E.parseWorkbook(XLSX, buf);
+    if (!nb.plan || !nb.plan.length) throw new Error("In der Datei steht kein Trainingsplan.");
+    H.xl = h; await idbPut("xlHandle", h); await xlWrite(true); render();
+  } catch (e) { if (e.name !== "AbortError") { ALERT = "Excel nicht verbunden: " + e.message; render(); } }
+}
+async function xlWrite(interactive) {
+  const h = H.xl; if (!h || !B) return false;
+  try {
+    let p = await h.queryPermission({ mode: "readwrite" });
+    if (p !== "granted") { if (!interactive) { H.xlState = "wait"; paintChrome(); return false; } p = await h.requestPermission({ mode: "readwrite" }); if (p !== "granted") { H.xlState = "wait"; paintChrome(); return false; } }
+    const src = new Uint8Array(await (await h.getFile()).arrayBuffer());
+    const r = await E.writeBack(XLSX, src, B, ST, today());
+    const w = await h.createWritable(); await w.write(r.bytes); await w.close();
+    H.xlAt = Date.now(); H.xlState = "ok"; idbPut("xlLast", H.xlAt); idbPut("srcxlsx", { bytes: r.bytes, at: H.xlAt });
+    if (interactive) toast("In " + h.name + " gespeichert", { icon: "check" });
+    paintChrome(); return true;
+  } catch (e) { H.xlState = "err"; paintChrome(); if (interactive) { ALERT = "Excel nicht geschrieben: " + (/lock|busy|NoModification|InvalidState/i.test(e.name + e.message) ? "Die Datei ist gerade in Excel geöffnet. Schließen und erneut tippen." : e.message); render(); } console.warn(e); return false; }
+}
+function xlLine() { if (!H.xl) return ""; const at = H.xlAt ? new Date(H.xlAt).toLocaleString("de-DE", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "noch nie"; return H.xlState === "wait" ? "Einmal tippen zum Freigeben" : H.xlState === "err" ? "Letzter Versuch fehlgeschlagen, tippen zum Wiederholen" : "Automatisch gespeichert · " + at; }
 async function writeBackNow(buf) {
+  if (H.xl && !buf) { await xlWrite(true); return; }
   try {
     const src = buf || ((await idbGet("srcxlsx")) || {}).bytes;
     if (!src) { WB_PENDING = true; $("#fx").click(); toast("Bitte einmal die aktuelle Trainingsplan-Excel wählen, die App schreibt dann hinein."); return; }
@@ -1089,7 +1138,7 @@ async function syncNow(interactive) {
   } catch (e) { syncState = "err"; syncMsg = "Datei verschoben oder iCloud nicht erreichbar"; paintChrome(); console.warn(e); }
 }
 async function syncPick(create) {
-  try { const types = [{ description: "Performance Lab", accept: { "application/json": [".json"] } }];
+  try { const types = [{ description: "Triger Sync", accept: { "application/json": [".json"] } }];
     const h = create ? await showSaveFilePicker({ suggestedName: SYNCNAME, types }) : (await showOpenFilePicker({ types }))[0];
     H.sync = h; await idbPut("syncHandle", h); await syncNow(true); render(); toast("Sync aktiv: " + h.name, { icon: "sync" });
   } catch (e) { if (e.name !== "AbortError") { ALERT = "Sync-Datei nicht nutzbar: " + e.message + ". Sperrt Chrome iCloud Drive, nimm den Ordner Dokumente (mit iCloud-Abgleich)."; render(); } }
@@ -1134,7 +1183,10 @@ function banners() {
 }
 function navBadge(c) { return c.P.filter(p => p.ops && p.ops.length).length + c.Ex.filter(s => s.date < c.t && s.date >= c.t - 14 && needs(s, c.t) && !s.dropped).length; }
 const TABS = [["heute", "Übersicht", "today"], ["plan", "Plan", "plan"], ["daten", "Daten", "data"], ["fort", "Leistung", "target"], ["prof", "Profil", "prof"]];
-let typing = false, dirty = false;
+let typing = false, dirty = false, lastY = 0, tbIdle = null;
+addEventListener("scroll", () => { if (WIDE()) return; const y = window.scrollY, tb = $(".tabbar"); if (!tb) return;
+  if (y > lastY + 6 && y > 140) tb.classList.add("min"); else if (y < lastY - 6 || y < 80 || y + innerHeight >= document.documentElement.scrollHeight - 40) tb.classList.remove("min"); lastY = y;
+  clearTimeout(tbIdle); tbIdle = setTimeout(() => tb.classList.remove("min"), 2500); }, { passive: true });
 function render() { if (typing) { dirty = true; return; } doRender(); }
 function doRender() {
   dirty = false; applyTheme(); autoApply();
@@ -1143,24 +1195,27 @@ function doRender() {
   const c = C(), n = navBadge(c), wide = WIDE();
   const body = tab === "heute" ? vHeute(c) : tab === "plan" ? vPlan(c) : tab === "daten" ? vData(c) : tab === "fort" ? vProg(c) : vProf(c);
   const nx = B.S.events.filter(e => e.date >= c.t).sort((a, b) => a.date - b.date)[0];
-  const side = `<aside class="side" aria-label="Navigation"><div class="brand"><img src="icon-192.png" alt="">Performance Lab</div><nav>${TABS.map(([k, l, ic]) => `<button data-tab="${k}" aria-current="${tab === k ? "page" : "false"}">${ui(ic)}${l}${k === "heute" && n ? `<span class="dot">${n}</span>` : ""}</button>`).join("")}</nav>
-    <button class="btn pri sm addbtn" data-act="free">${ui("plus")}Training hinzufügen</button><div class="foot">${nx ? `<div class="cdmini"><b class="num">${nx.date - c.t}</b><span>Tage bis ${esc(nx.name)}</span></div>` : ""}${syncPill()}</div></aside>`;
+  const rail = PREF.side === "rail", inspOff = PREF.insp === false;
+  const side = `<aside class="side" aria-label="Navigation"><div class="brand"><img src="triger.svg" alt=""><span>Triger</span><button class="sidetog" data-act="sidetog" aria-label="${rail ? "Seitenleiste einblenden" : "Seitenleiste einklappen"}" title="Seitenleiste">${ui("sidebar")}</button></div><nav>${TABS.map(([k, l, ic]) => `<button data-tab="${k}" aria-current="${tab === k ? "page" : "false"}" title="${l}">${ui(ic)}<span class="nl">${l}</span>${k === "heute" && n ? `<span class="dot">${n}</span>` : ""}</button>`).join("")}</nav>
+    <button class="btn pri sm addbtn" data-act="free" title="Training hinzufügen">${ui("plus")}<span class="nl">Training hinzufügen</span></button><div class="foot">${nx ? `<div class="cdmini"><b class="num">${nx.date - c.t}</b><span>Tage bis ${esc(nx.name)}</span></div>` : ""}${syncPill()}</div></aside>`;
   if (!wide) { for (let k = SHEETS.length - 1; k >= 0; k--) if (SHEETS[k].side) SHEETS.splice(k, 1); }
-  const insp = wide ? `<aside class="insp" id="insp" aria-label="Details">${inspHTML(c)}</aside>` : "";
+  if (wide && inspOff && SHEETS.some(S => S.side)) PREF.insp = true;
+  const insp = wide && PREF.insp !== false ? `<aside class="insp" id="insp" aria-label="Details">${inspHTML(c)}</aside>` : "";
   const sc = window.scrollY;
-  root.innerHTML = `<div class="shell${wide ? "" : ""}">${side}<main class="content" id="main">${body}</main>${insp}</div>
+  root.innerHTML = `<div class="shell${rail ? " rail" : ""}${wide && PREF.insp === false ? " noinsp" : ""}">${side}<main class="content" id="main">${wide && PREF.insp === false ? `<button class="insptog" data-act="insptog" aria-label="Details einblenden" title="Details einblenden">${ui("sidebar")}</button>` : ""}${body}</main>${insp}</div>
    <div class="tabbar"><nav class="tabs" aria-label="Tabs">${TABS.map(([k, l, ic]) => `<button data-tab="${k}" aria-current="${tab === k ? "page" : "false"}" aria-label="${l}${k === "heute" && n ? ", " + n + " offen" : ""}">${ui(ic)}<span>${l}</span>${k === "heute" && n ? `<span class="dot">${n}</span>` : ""}</button>`).join("")}</nav><button class="fab" data-act="free" aria-label="Training hinzufügen">${ui("plus")}</button></div>`;
-  window.scrollTo(0, sc); bindSwipes(); bindWeekSwipe();
+  foldify($("#main")); window.scrollTo(0, sc); bindSwipes(); bindWeekSwipe();
   SHEETS.forEach(S => { if (S.opt.live && !S.side) rerenderSheet(S); }); bindSwipes();
 }
 function inspHTML(c) {
   const top = [...SHEETS].reverse().find(S => S.side);
-  if (top) { const n = SHEETS.filter(S => S.side).length; return `<div class="panel-bar">${n > 1 ? `<button class="lnk" data-act="close">${ui("back")}Zurück</button>` : `<span></span>`}</div><div class="panel-body">${top.render(top)}</div>`; }
+  if (top) { const n = SHEETS.filter(S => S.side).length; return `<div class="panel-bar">${n > 1 ? `<button class="lnk" data-act="close">${ui("back")}Zurück</button>` : `<span></span>`}<button class="sidetog" data-act="insptog" aria-label="Details ausblenden" title="Details ausblenden">${ui("sidebar")}</button></div><div class="panel-body">${top.render(top)}</div>`; }
   /* Ausgewählte Einheit verschoben/ersetzt? Dann die Nachfolge-Einheit (ID mit ~) zeigen statt still auf eine andere zu springen. */
   if (selId && !findS(selId)) { const nx = c.Ex.find(x => String(x.id).startsWith(String(selId).split("~")[0] + "~") && !x.dropped); selId = nx ? nx.id : null; }
   if (selId) { const cur = findS(selId); if (cur && cur.dropped) { const nx = c.Ex.find(x => String(x.id).startsWith(String(selId).split("~")[0] + "~") && !x.dropped); if (nx) selId = nx.id; } }
   if (!(selId && findS(selId))) { const h = heroPick(c); if (h) { selId = h.s.id; INSP = { mode: "" }; } }
-  return selId && findS(selId) ? sessView(selId, INSP) : `<div class="empty"><b>Einheit wählen</b>Details, Eintragen und Verschieben erscheinen hier.</div>`;
+  const bar = `<div class="panel-bar"><span></span><button class="sidetog" data-act="insptog" aria-label="Details ausblenden" title="Details ausblenden">${ui("sidebar")}</button></div>`;
+  return bar + (selId && findS(selId) ? sessView(selId, INSP) : `<div class="empty"><b>Einheit wählen</b>Details, Eintragen und Verschieben erscheinen hier.</div>`);
 }
 function paintInsp() { const i = $("#insp"); if (!i || !B) return; i.innerHTML = inspHTML(C()); $$(".content .row.sel").forEach(r => r.classList.remove("sel")); if (selId && !SHEETS.some(S => S.side)) $$(`.content [data-act=sess][data-id="${CSS.escape(selId)}"]`).forEach(r => r.classList.add("sel")); if (typeof bindSwipes === "function") bindSwipes(); }
 function paintChrome() { $$(".syncpill").forEach(el => { el.outerHTML = syncPill(); }); }
@@ -1170,10 +1225,13 @@ function applyTheme() { const r = document.documentElement; if (PREF.theme === "
 
 /* ---------- Sheets öffnen ---------- */
 function openSess(id, mode) {
+  if (WIDE() && PREF.insp === false) { PREF.insp = true; idbPut("pref", PREF); }
   if (WIDE()) { for (let k = SHEETS.length - 1; k >= 0; k--) if (SHEETS[k].side) SHEETS.splice(k, 1); selId = id; INSP = { mode: mode || "" }; render(); setTimeout(() => { const i = $("#insp"); if (i) i.scrollTop = 0; const h = $("#insp .sheet-title"); h && h.focus({ preventScroll: true }); }, 30); return; }
   const S = openSheet(s => sessView(id, s.data), { label: "Einheit", data: { mode: mode || "", id }, live: true, tall: false });
   S.kind = "sess";
 }
+/* Einheit des offenen Formulars: Sheet (iPhone) trägt die ID, die Mac-Seitenleiste nutzt selId. */
+const formS = cur => cur && cur.D.id ? findS(cur.D.id) : cur && !cur.S && selId ? findS(selId) : null;
 const curForm = () => { const S = SHEETS[SHEETS.length - 1]; if (S) return { D: S.data, re: () => rerenderSheet(S), S }; if (WIDE() && selId) return { D: INSP, re: () => paintInsp(), S: null }; return null; };
 
 /* ---------- Gesten ---------- */
@@ -1218,7 +1276,7 @@ function autoApply() {
   } finally { autoBusy = false; }
 }
 function coachCards(c) {
-  const rec = Object.keys(ST).filter(k => k.startsWith("adj:")).map(k => ST[k].v).filter(a => a && a.auto && !a.undone && !a.seen && Date.now() - a.created < 4 * 864e5).sort((a, b) => b.created - a.created).slice(0, 4);
+  const rec0 = Object.keys(ST).filter(k => k.startsWith("adj:")).map(k => ST[k].v).filter(a => a && a.auto && !a.undone && !a.seen && Date.now() - a.created < 4 * 864e5).sort((a, b) => b.created - a.created), rec = rec0.slice(0, 6);
   return rec.map(a => `<article class="prop auto rise"><span class="k">${ui("sync")}Automatisch angepasst</span><h3>${esc(a.title)}</h3><p>${esc(a.why)}</p>${a.lines && a.lines.length ? `<ul>${a.lines.slice(0, 6).map(l => `<li>${ui(/entfällt/.test(l) ? "x" : / neu$/.test(l) ? "plus" : "move")}<span>${esc(l)}</span></li>`).join("")}${a.lines.length > 6 ? `<li><span>… ${a.lines.length - 6} weitere</span></li>` : ""}</ul>` : ""}<div class="acts"><button class="btn ghost sm" data-act="adjseen" data-v="${esc(a.id)}">Verstanden</button><button class="btn ghost sm" data-act="undoadj" data-v="${esc(a.id)}">${ui("undo")}Zurücknehmen</button></div></article>`).join("");
 }
 function setLog(id, patch) { put("log:" + id, Object.assign({}, get("log:" + id) || {}, patch)); }
@@ -1266,9 +1324,9 @@ document.addEventListener("click", async e => {
     case "mode": { const f = cf(); if (!f) break; f.D.mode = v; f.D.f = null; f.D.why = null; f.re(); break; }
     case "setf": { const f = cf(); if (!f) break; const F = f.D.f, raw = v; const nv = ["st", "sport"].includes(b.dataset.f) ? raw : Number(raw);
       if (b.dataset.f === "more") F.more = !!nv; else F[b.dataset.f] = F[b.dataset.f] === nv && !["st", "sport"].includes(b.dataset.f) ? null : nv; buzz(4); f.re(); break; }
-    case "step": { const f = cf(); if (!f) break; const F = f.D.f, s = f.D.id ? findS(f.D.id) : null, sport = s ? s.sport : F.sport; stepField(F, b.dataset.f, Number(v), sport); buzz(3); syncInputs(F, sport); break; }
+    case "step": { const f = cf(); if (!f) break; const F = f.D.f, s = formS(f), sport = s ? s.sport : F.sport; stepField(F, b.dataset.f, Number(v), sport); buzz(3); syncInputs(F, sport); break; }
     case "savelog": { const f = cf(); if (!f) break; const s = findS(id), F = f.D.f; const before = Object.assign({}, C().WS.weeks[s.w - 1]);
-      setLog(id, { st: F.st, dur: F.dur, dist: ["Lauf", "Rad", "Schwimmen", "Triathlon"].includes(s.sport) ? F.dist : null, hf: F.hf, hfmax: F.hfmax, rpe: F.rpe, feel: F.feel, shoe: F.shoe, hm: F.hm, pull: F.pull, note: F.note, why: undefined, ikm: undefined, imin: undefined });
+      setLog(id, { st: F.st, dur: F.dur, dist: ["Lauf", "Rad", "Schwimmen", "Triathlon"].includes(s.sport) ? (s.sport === "Schwimmen" && num(F.dist) && F.dist > 20 ? F.dist / 1000 : F.dist) : null, hf: F.hf, hfmax: F.hfmax, rpe: F.rpe, feel: F.feel, shoe: F.shoe, hm: F.hm, pull: F.pull, note: F.note, why: undefined, ikm: undefined, imin: undefined });
       buzz(15); if (f.S) closeSheet(f.S, true); else { INSP = {}; } render(); const m = milestone(s, before); toast(m || "Gespeichert. Stark.", { icon: "check", cele: !!m }); break; }
     case "why": { const f = cf(); const s = findS(id); setLog(id, { st: "✗", why: v });
       if (v === "krank") { const sk = get("sick"); if (!(sk && num(sk.from) && !num(sk.to))) put("sick", { from: s ? s.date : t, to: null }); }
@@ -1377,7 +1435,12 @@ document.addEventListener("click", async e => {
     case "ics": await shareFile("Training.ics", "text/calendar", E.ics(B, ST, t)); break;
     case "xlsx": exportXlsx(); break;
     case "wb": writeBackNow(); break;
-    case "reset": if (confirm("Alle Daten in dieser App löschen? Die Sync-Datei bleibt erhalten.")) { await idbDel("base"); await idbDel("state"); await idbDel("srcxlsx"); await idbDel("syncHandle"); B = null; ST = {}; H.sync = null; MEMO.k = null; render(); } break;
+    case "xlpick": xlPick(); break;
+    case "fold": toggleFold(v); break;
+    case "sidetog": PREF.side = PREF.side === "rail" ? "full" : "rail"; idbPut("pref", PREF); doRender(); break;
+    case "insptog": PREF.insp = PREF.insp === false; idbPut("pref", PREF); doRender(); break;
+    case "xloff": H.xl = null; H.xlState = "off"; await idbDel("xlHandle"); render(); toast("Excel-Verbindung getrennt."); break;
+    case "reset": if (confirm("Alle Daten in dieser App löschen? Die Sync-Datei bleibt erhalten.")) { await idbDel("base"); await idbDel("state"); await idbDel("srcxlsx"); await idbDel("syncHandle"); await idbDel("xlHandle"); H.xl = null; B = null; ST = {}; H.sync = null; MEMO.k = null; render(); } break;
     case "upd": navigator.serviceWorker.getRegistration().then(r => { if (r && r.waiting) r.waiting.postMessage("skip"); setTimeout(() => location.reload(), 300); }); break;
   }
 });
@@ -1386,7 +1449,7 @@ document.addEventListener("focusin", e => { if (e.target.matches("input,textarea
 document.addEventListener("focusout", () => setTimeout(() => { typing = false; if (dirty) doRender(); }, 80));
 document.addEventListener("input", e => {
   const el = e.target, f = el.dataset.in; if (!f) return; const cur = curForm(); if (!cur || !cur.D.f) return;
-  const s = cur.D.id ? findS(cur.D.id) : null, sport = s ? s.sport : cur.D.f.sport;
+  const s = formS(cur), sport = s ? s.sport : cur.D.f.sport;
   if (["dur", "dist", "hf", "hfmax", "hm", "puls", "vo2", "v", "kg", "wt"].includes(f)) { cur.D.f[f] = readField(f, el.value, sport); if (f === "vo2") cur.D.f.vo2touched = true; const dv = $("#derived", el.closest(".sheet") || el.closest("#insp") || document); if (dv) dv.innerHTML = derivedTxt(cur.D.f, sport); }
   else if (["note", "name", "shoe", "place", "airesp", "aikey", "aimodel"].includes(f)) { if (!cur.D.f) cur.D.f = {}; cur.D.f[f] = el.value; }
   else if (f.startsWith("fd_")) { if (!cur.D.f) cur.D.f = {}; cur.D.f[f.slice(3)] = el.value; }
@@ -1395,7 +1458,7 @@ document.addEventListener("input", e => {
 document.addEventListener("change", e => {
   const el = e.target, f = el.dataset.in; if (!f) return;
   if (f === "shoe") { const cur = curForm(); if (cur && cur.D.f) cur.D.f.shoe = el.value; }
-  if (f === "dur" || f === "dist") { const cur = curForm(); if (cur && cur.D.f) { const s = cur.D.id ? findS(cur.D.id) : null; syncInputs(cur.D.f, s ? s.sport : cur.D.f.sport); } }
+  if (f === "dur" || f === "dist") { const cur = curForm(); if (cur && cur.D.f) { const s = formS(cur); syncInputs(cur.D.f, s ? s.sport : cur.D.f.sport); } }
   if (f === "ttime" || f === "thf") { const k = el.dataset.k, r = get("test:" + k) || {}, raw = el.value.trim();
     if (f === "ttime") { const tm = parseTime(raw); if (raw && tm == null) { el.style.boxShadow = "inset 0 0 0 2px var(--bad)"; toast("Zeit nicht erkannt. Beispiel: 4230 für 42:30."); return; } el.style.boxShadow = ""; put("test:" + k, Object.assign({}, r, { time: tm })); if (tm) el.value = U.hms(tm); }
     else { const n = raw === "" ? null : Number(raw); put("test:" + k, Object.assign({}, r, { hf: num(n) ? n : null })); }
@@ -1414,7 +1477,7 @@ let wasWide = WIDE(); addEventListener("resize", () => { if (WIDE() !== wasWide)
 
 /* ---------- Start ---------- */
 (async () => {
-  try { B = (await idbGet("base")) || null; ST = (await idbGet("state")) || {}; PREF = Object.assign(PREF, (await idbGet("pref")) || {}); H.sync = (await idbGet("syncHandle")) || null; } catch (e) { console.warn(e); }
+  try { B = (await idbGet("base")) || null; ST = (await idbGet("state")) || {}; PREF = Object.assign(PREF, (await idbGet("pref")) || {}); H.sync = (await idbGet("syncHandle")) || null; H.xl = (await idbGet("xlHandle")) || null; H.xlAt = (await idbGet("xlLast")) || 0; } catch (e) { console.warn(e); }
   for (const k in ST) if (ST[k] && ST[k].v === null) delete ST[k];
   if (H.sync) { syncState = "wait"; syncMsg = "Einmal tippen zum Freigeben"; }
   doRender(); document.body.classList.add("ready");

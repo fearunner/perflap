@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="40 70 432 380"><defs>
+<linearGradient id="fur" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF9F2F"/><stop offset=".7" stop-color="#F06A12"/><stop offset="1" stop-color="#D9480F"/></linearGradient>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1D2433"/><stop offset="1" stop-color="#080B12"/></linearGradient>
+<linearGradient id="eye" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF1A8"/><stop offset="1" stop-color="#F5B800"/></linearGradient>
+<linearGradient id="wh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#F3E7D6"/></linearGradient>
+</defs><g>
+<!-- ears, pointed -->
+<circle cx="150" cy="136" r="58" fill="url(#fur)"/>
+<circle cx="362" cy="136" r="58" fill="url(#fur)"/>
+<circle cx="154" cy="140" r="36" fill="#14161B"/>
+<circle cx="358" cy="140" r="36" fill="#14161B"/>
+<circle cx="160" cy="146" r="18" fill="#F3E7D6"/>
+<circle cx="352" cy="146" r="18" fill="#F3E7D6"/>
+<!-- angular head -->
+<path d="M256 118 L340 126 L404 176 L424 252 L404 330 L352 396 L256 446 L160 396 L108 330 L88 252 L108 176 L172 126 Z" fill="url(#fur)" stroke="url(#fur)" stroke-width="20" stroke-linejoin="round"/>
+<!-- cheek ruff spikes -->
+<path d="M96 270 L46 300 L98 312 L64 352 L122 346 L116 386 L170 400 Z" fill="#E85D0F"/>
+<path d="M416 270 L466 300 L414 312 L448 352 L390 346 L396 386 L342 400 Z" fill="#E85D0F"/>
+<path d="M70 304 L98 312 L76 336 Z M442 304 L414 312 L436 336 Z" fill="#F3E7D6"/>
+<!-- muzzle angular -->
+<path d="M256 276 L318 286 L360 332 L346 382 L298 420 L256 438 L214 420 L166 382 L152 332 L194 286 Z" fill="url(#wh)" stroke="url(#wh)" stroke-width="10" stroke-linejoin="round"/>
+<!-- eye white patches -->
+<path d="M140 232 L196 214 L234 240 L206 262 L156 258 Z" fill="url(#wh)"/>
+<path d="M372 232 L316 214 L278 240 L306 262 L356 258 Z" fill="url(#wh)"/>
+<!-- forehead stripes -->
+<path d="M244 122 L268 122 L262 188 L256 206 L250 188 Z" fill="#14161B"/>
+<path d="M206 130 L224 126 L238 186 L228 194 Z" fill="#14161B"/>
+<path d="M306 130 L288 126 L274 186 L284 194 Z" fill="#14161B"/>
+<path d="M176 140 L192 136 L210 182 L200 186 Z" fill="#14161B"/>
+<path d="M336 140 L320 136 L302 182 L312 186 Z" fill="#14161B"/>
+<!-- side stripes -->
+<path d="M92 222 L158 246 L96 258 Z" fill="#14161B"/>
+<path d="M96 280 L162 286 L112 306 Z" fill="#14161B"/>
+<path d="M420 222 L354 246 L416 258 Z" fill="#14161B"/>
+<path d="M416 280 L350 286 L400 306 Z" fill="#14161B"/>
+<path d="M118 330 L170 322 L138 352 Z" fill="#14161B"/>
+<path d="M394 330 L342 322 L374 352 Z" fill="#14161B"/>
+<!-- heavy brows converging -->
+<path d="M136 210 L242 236 L248 220 L146 190 Z" fill="#14161B"/>
+<path d="M376 210 L270 236 L264 220 L366 190 Z" fill="#14161B"/>
+<!-- eyes: almond, fierce -->
+<path d="M156 226 Q198 218 236 248 Q196 266 164 246 Z" fill="url(#eye)" stroke="#14161B" stroke-width="7" stroke-linejoin="round"/>
+<path d="M356 226 Q314 218 276 248 Q316 266 348 246 Z" fill="url(#eye)" stroke="#14161B" stroke-width="7" stroke-linejoin="round"/>
+<ellipse cx="203" cy="243" rx="5.5" ry="13" fill="#14161B"/>
+<ellipse cx="309" cy="243" rx="5.5" ry="13" fill="#14161B"/>
+<circle cx="194" cy="236" r="3.5" fill="#fff"/><circle cx="300" cy="236" r="3.5" fill="#fff"/>
+<!-- nose bridge stripes -->
+<path d="M232 252 L246 262 L238 268 Z M280 252 L266 262 L274 268 Z" fill="#14161B"/>
+<!-- nose -->
+<path d="M226 300 L286 300 L270 324 L256 332 L242 324 Z" fill="#241815" stroke="#241815" stroke-width="6" stroke-linejoin="round"/>
+<!-- mouth: stern -->
+<path d="M256 332 L256 360 M256 360 L224 374 M256 360 L288 374" stroke="#241815" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<g fill="#241815"><circle cx="214" cy="344" r="3.5"/><circle cx="200" cy="332" r="3.5"/><circle cx="196" cy="350" r="3.5"/><circle cx="298" cy="344" r="3.5"/><circle cx="312" cy="332" r="3.5"/><circle cx="316" cy="350" r="3.5"/></g>
+</g></svg>

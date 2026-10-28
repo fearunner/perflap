@@ -43,15 +43,21 @@ function parseWorkbook(XLSX, buf) {
     const s = { id: k + "-" + cnt[k], w: r[0], date, prio: r[3] || "", sport, name: String(r[5] || ""), desc: String(r[6] || ""),
       km: num(r[8]) ? r[8] : 0, min: num(r[9]) ? r[9] : 0, code: String(r[15] || ""),
       time: ((String(r[2] || "").match(/\d\d:\d\d–\d\d:\d\d/) || [""])[0]),
-      wake: ((String(r[21] || "").match(/Wecker (\d+:\d\d)/) || [, ""])[1]), hint: String(r[21] || "").replace(/Wecker \d+:\d\d\n?/, "").trim(),
+      wake: ((String(r[21] || "").match(/Wecker (\d+:\d\d)/) || [, ""])[1]), hint: String(r[21] || "").split("\n").filter(l => !/^\s*(\[App\]|Wecker \d+:\d\d\s*$)/.test(l)).join("\n").trim(),
       typ, row: ri + 5, test: typ ? (RACE_TYPES.includes(typ) ? "race" : "test") : "", tkey: typ ? date + "-" + typ : "", trip: /✈/.test(String(r[2] || "")) || /^Reise/.test(String(r[5] || "")) };
     /* v3.3: zurückgeschriebene Excel neu geladen: Präfixe der App verstehen statt als Namen anzeigen. */
+    s.vApp = /\[App\]/.test(String(r[21] || ""));
     const pre = (s.name.match(/^\[(entfällt|verschoben|App)\]\s*/) || [])[1];
     if (pre) { s.name = s.name.replace(/^\[(entfällt|verschoben|App)\]\s*/, ""); s.xl = pre; if (pre === "entfällt") { s.dropped = true; s.note = String(r[21] || "").replace(/^\[App\]\s*/, "").split("\n")[0]; } }
-    if (/^\[App\]/.test(s.hint)) s.hint = ""; /* App-Vermerk wird beim Zurückschreiben neu erzeugt, sonst doppelt */
     plan.push(s);
     const st = String(r[10] || "").trim();
     if (["✓", "½", "✗"].includes(st) || num(r[11]) || num(r[12])) seed["log:" + s.id] = Object.assign({ st: ["✓", "½", "✗"].includes(st) ? st : "", ikm: num(r[11]) ? r[11] : null, imin: num(r[12]) ? r[12] : null }, st === "✗" && /^\[App\] krank/.test(String(r[21] || "")) ? { why: "krank" } : {});
+    /* v3.4: Verschiebung aus der Excel wiederherstellen (z. B. neues Gerät): Original entfällt, Kopie am Zieltag, Status wandert mit. */
+    if (pre === "verschoben") { const m = String(r[21] || "").match(/Verschoben auf \S+ (\d\d)\.(\d\d)\.(?: (\d\d:\d\d–\d\d:\d\d))?/);
+      if (m && num(date)) { const y = sd(date).getUTCFullYear(); let d2 = serialOf(new Date(Date.UTC(y, +m[2] - 1, +m[1], 12))); if (d2 < date - 180) d2 = serialOf(new Date(Date.UTC(y + 1, +m[2] - 1, +m[1], 12)));
+        const cid = s.id + "~" + d2 + "x", c = Object.assign({}, s, { id: cid, date: d2, time: m[3] || s.time, movedFrom: date, note: "Von " + wdD(date) + " verschoben." }); delete c.row; delete c.xl;
+        seed["adj:xl-" + s.id] = { id: "xl-" + s.id, key: "xlmove:" + s.id, title: s.name + " auf " + wdD(d2), why: "Aus der Excel übernommen.", ops: [{ type: "drop", id: s.id, note: "Verschoben auf " + wdD(d2) + "." }, { type: "add", s: c }], lines: [], created: 1, xl: true };
+        if (seed["log:" + s.id]) { seed["log:" + cid] = seed["log:" + s.id]; delete seed["log:" + s.id]; } } }
   });
   if (!plan.length) throw new Error("Im Blatt Plan wurden keine Einheiten gefunden.");
   const tests = [];
@@ -1181,6 +1187,8 @@ function wbPaths(wbXml, relXml) {
   return out;
 }
 /* Baut die Zellwerte für Plan, Wochen und Tests. Krankheitsgründe, Reiseorte und Gewicht werden nicht geschrieben. */
+/* App-Vermerk in der ersten Zeile, darunter bleiben Wecker und eigene Hinweise erhalten. */
+const vTail = o => (o.wake ? "\nWecker " + o.wake : "") + (o.hint ? "\n" + o.hint : "");
 function writeBackCells(B0, B, st, t) {
   const E = effective(B, st), byId = new Map(E.map(s => [s.id, s])), plan = {}, weeks = {}, tests = {}, stat = { status: 0, ist: 0, changed: 0, moved: 0, chk: 0, tests: 0, free: freeList(st).length };
   const priv = new Set(activeAdj(st).filter(a => /^sick/.test(a.key || "")).map(a => a.id));
@@ -1192,7 +1200,7 @@ function writeBackCells(B0, B, st, t) {
     const own = logOf(s), via = mv ? logOf(mv) : null, use = via && via.stv ? { s: mv, ...via } : { s, ...own };
     const { x, l, stv } = use;
     plan["K" + r] = stv; if (stv) stat.status++;
-    if (x === "krank" && !s.dropped && !s.edited && !mv) plan["V" + r] = "[App] krank" + (o.hint ? " " + o.hint : "");
+    if (x === "krank" && !s.dropped && !s.edited && !mv) plan["V" + r] = "[App] krank" + vTail(o);
     const dk = distKm(use.s, l), ik = dk != null ? r1(dk) : num(l.ikm) ? l.ikm : null, im = num(l.dur) ? Math.round(l.dur) : num(l.imin) ? l.imin : null;
     plan["L" + r] = stv && stv !== "✗" ? ik : null; plan["M" + r] = stv && stv !== "✗" ? im : null; if (ik != null || im != null) stat.ist++;
     const base = o.name.replace(/^\[(entfällt|verschoben|App)\]\s*/, "");
@@ -1200,19 +1208,19 @@ function writeBackCells(B0, B, st, t) {
       const same = weekOf(B0, mv.date) === o.w;
       plan["F" + r] = "[verschoben] " + base;
       plan["I" + r] = same ? mv.km || 0 : 0; plan["J" + r] = same ? mv.min || 0 : 0;
-      plan["V" + r] = "[App] Verschoben auf " + wdD(mv.date) + (mv.time ? " " + mv.time : "") + "." + (via.stv ? (via.stv === "✗" ? " Dort verpasst." : " Dort erledigt.") : own.stv === "✗" ? " Hier verpasst, dort offen." : "") + (same ? "" : " Andere Woche: Umfang zählt in der Excel weiter hier.") + (o.hint ? " " + o.hint : "");
+      plan["V" + r] = "[App] Verschoben auf " + wdD(mv.date) + (mv.time ? " " + mv.time : "") + "." + (via.stv ? (via.stv === "✗" ? " Dort verpasst." : " Dort erledigt.") : own.stv === "✗" ? " Hier verpasst, dort offen." : "") + (same ? "" : " Andere Woche: Umfang zählt in der Excel weiter hier.") + vTail(o);
       stat.moved++;
     } else if (s.dropped) {
       plan["F" + r] = "[entfällt] " + base;
       plan["I" + r] = 0; plan["J" + r] = 0;
-      plan["V" + r] = "[App] " + (priv.has(s.adj) ? "Angepasst." : (s.note || "Entfällt.")) + (o.hint ? " " + o.hint : "");
+      plan["V" + r] = "[App] " + (priv.has(s.adj) ? "Angepasst." : (s.note || "Entfällt.")) + vTail(o);
       stat.changed++;
     } else if (s.edited) {
       plan["F" + r] = priv.has(s.adj) ? "[App] Angepasste Einheit" : "[App] " + s.name.replace(/^★\s*/, "");
       if (s.km !== o.km) plan["I" + r] = s.km || 0; if (s.min !== o.min) plan["J" + r] = s.min || 0; if (s.prio && s.prio !== o.prio) plan["D" + r] = s.prio;
-      plan["V" + r] = "[App] " + (priv.has(s.adj) ? "Angepasst." : "Ursprünglich: " + base + ". " + (s.note || "")) + (o.hint ? " " + o.hint : "");
+      plan["V" + r] = "[App] " + (priv.has(s.adj) ? "Angepasst." : "Ursprünglich: " + base + ". " + (s.note || "")) + vTail(o);
       stat.changed++;
-    }
+    } else if (o.vApp && !o.xl && x !== "krank") plan["V" + r] = vTail(o).trim() || null; /* alter App-Vermerk ohne Grundlage (z. B. wieder gesund) */
   });
   Object.keys(B0.weeks || {}).forEach(w => { const r = B0.weeks[w].row, c = val(st, "chk:" + w); if (!r || !c) return; weeks["D" + r] = num(c.puls) ? c.puls : null; weeks["E" + r] = num(c.pain) ? c.pain : null; weeks["F" + r] = num(c.feel) ? c.feel : null; stat.chk++; });
   B0.tests.forEach(T => { const r = T.row, v = val(st, "test:" + T.key); if (!r || !v) return; if (num(v.time)) tests["F" + r] = v.time; if (num(v.hf)) tests["G" + r] = v.hf; if (num(v.time) || num(v.hf)) stat.tests++; });

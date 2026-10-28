@@ -1,4 +1,4 @@
-/* Triger 3.3 (vormals Performance Lab). Oberfläche. Daten bleiben auf dem Gerät (IndexedDB) und in der Sync-Datei, die du selbst wählst.
+/* Triger 3.4 (vormals Performance Lab). Oberfläche. Daten bleiben auf dem Gerät (IndexedDB) und in der Sync-Datei, die du selbst wählst.
    Keine externen Requests, kein Tracking. Planlogik ausschließlich in engine.js. */
 (function () {
 "use strict";
@@ -304,7 +304,7 @@ function vHeute(c) {
   if (h) {
     const s = h.s, z = zoneOf(s, c), S = sp(s.sport), wake = s.wake && h.when === "Morgen" ? "Wecker " + s.wake : s.wake && h.when === "Heute" ? "Wecker " + s.wake : "";
     x += `<article class="bib rise" style="--c:${s.test === "race" ? "var(--gold-s)" : s.test === "test" ? "var(--tartan)" : S.c}">
-      <div class="band"><span>${icon(s.sport)}${h.doneToday ? "Heute erledigt · Als Nächstes" : "Als Nächstes"}</span><span>${esc(h.when)}${s.time ? " · " + esc(s.time.slice(0, 5)) : ""}</span></div><div class="holes" aria-hidden="true"><i></i><i></i></div>
+      <div class="band"><span>${icon(s.sport)}${h.doneToday ? "Heute erledigt · Als Nächstes" : "Als Nächstes"}</span><span>${esc(h.when)}${s.time ? " · " + esc(s.time.slice(0, 5)) : ""}</span></div><svg class="stripes" viewBox="0 0 120 120" aria-hidden="true"><path d="M70 0h14L40 120H26zM96 0h10L62 120H52zM118 0h6L84 120h-6z"/></svg>
       <div class="bd"><div class="when">${esc(S.lab)}${s.prio === "A" ? " · Schlüsseleinheit" : ""}${s.test === "test" ? " · Test" : ""}</div><h2>${esc(s.name.replace(/^★\s*/, ""))}</h2>
        <div class="big">${s.km ? `<b>${esc(s.sport === "Schwimmen" ? Math.round(s.km * 1000).toLocaleString("de-DE") : de(s.km))}<small>${s.sport === "Schwimmen" ? "m" : "km"}</small></b>` : ""}${s.min ? `<b>${esc(durShort(s.min))}<small>${s.min < 60 ? "min" : "h"}</small></b>` : ""}</div>
        ${z.pace || z.hf ? `<div class="zone">${z.pace ? `<span>${esc(z.pace)}</span>` : ""}${z.hf ? `<span>${ui("heart")}HF ${esc(z.hf)}</span>` : ""}</div>` : ""}
@@ -1111,7 +1111,9 @@ let WB_PENDING = false;
 function importXlsx(buf) {
   const nb = E.parseWorkbook(XLSX, buf), first = !B;
   idbPut("srcxlsx", { bytes: buf, at: Date.now() }); /* Original für das Zurückschreiben, nur lokal */
-  for (const k in nb.seed) if (!ST[k]) ST[k] = { v: nb.seed[k], t: 1 };
+  /* Verschiebungen aus der Excel nur übernehmen, wenn die App diese Einheit nicht schon selbst verschoben oder geändert hat. */
+  const touched = new Set(); Object.keys(ST).filter(k => k.startsWith("adj:")).forEach(k => { const a = ST[k].v; if (a && !a.undone) (a.ops || []).forEach(o => touched.add(o.type === "add" ? String(o.s.id).split("~")[0] : o.id)); });
+  for (const k in nb.seed) { if (ST[k]) continue; if (k.startsWith("adj:xl-") && touched.has(k.slice(7))) continue; if (k.startsWith("log:") && k.includes("~") && touched.has(k.slice(4).split("~")[0])) continue; ST[k] = { v: nb.seed[k], t: 1 }; }
   delete nb.seed; B = nb; MEMO.k = null; idbPut("base", B); saveState();
   toast(first ? "Plan geladen: " + B.plan.length + " Einheiten" : "Plan aktualisiert. Deine Einträge bleiben.", { icon: "check" }); ALERT = ""; render();
 }
@@ -1184,7 +1186,7 @@ function banners() {
 function navBadge(c) { return c.P.filter(p => p.ops && p.ops.length).length + c.Ex.filter(s => s.date < c.t && s.date >= c.t - 14 && needs(s, c.t) && !s.dropped).length; }
 const TABS = [["heute", "Übersicht", "today"], ["plan", "Plan", "plan"], ["daten", "Daten", "data"], ["fort", "Leistung", "target"], ["prof", "Profil", "prof"]];
 let typing = false, dirty = false, lastY = 0, tbIdle = null;
-addEventListener("scroll", () => { if (WIDE()) return; const y = window.scrollY, tb = $(".tabbar"); if (!tb) return;
+addEventListener("scroll", () => { document.body.classList.toggle("scrolled", window.scrollY > 52); if (WIDE()) return; const y = window.scrollY, tb = $(".tabbar"); if (!tb) return;
   if (y > lastY + 6 && y > 140) tb.classList.add("min"); else if (y < lastY - 6 || y < 80 || y + innerHeight >= document.documentElement.scrollHeight - 40) tb.classList.remove("min"); lastY = y;
   clearTimeout(tbIdle); tbIdle = setTimeout(() => tb.classList.remove("min"), 2500); }, { passive: true });
 function render() { if (typing) { dirty = true; return; } doRender(); }
@@ -1202,9 +1204,10 @@ function doRender() {
   if (wide && inspOff && SHEETS.some(S => S.side)) PREF.insp = true;
   const insp = wide && PREF.insp !== false ? `<aside class="insp" id="insp" aria-label="Details">${inspHTML(c)}</aside>` : "";
   const sc = window.scrollY;
-  root.innerHTML = `<div class="shell${rail ? " rail" : ""}${wide && PREF.insp === false ? " noinsp" : ""}">${side}<main class="content" id="main">${wide && PREF.insp === false ? `<button class="insptog" data-act="insptog" aria-label="Details einblenden" title="Details einblenden">${ui("sidebar")}</button>` : ""}${body}</main>${insp}</div>
+  const ttl = (TABS.find(t => t[0] === tab) || [, ""])[1];
+  root.innerHTML = `<div class="shell${rail ? " rail" : ""}${wide && PREF.insp === false ? " noinsp" : ""}">${side}<main class="content" id="main"><div class="navbar" aria-hidden="true"><span>${esc(ttl)}</span></div>${wide && PREF.insp === false ? `<button class="insptog" data-act="insptog" aria-label="Details einblenden" title="Details einblenden">${ui("sidebar")}</button>` : ""}${body}</main>${insp}</div>
    <div class="tabbar"><nav class="tabs" aria-label="Tabs">${TABS.map(([k, l, ic]) => `<button data-tab="${k}" aria-current="${tab === k ? "page" : "false"}" aria-label="${l}${k === "heute" && n ? ", " + n + " offen" : ""}">${ui(ic)}<span>${l}</span>${k === "heute" && n ? `<span class="dot">${n}</span>` : ""}</button>`).join("")}</nav><button class="fab" data-act="free" aria-label="Training hinzufügen">${ui("plus")}</button></div>`;
-  foldify($("#main")); window.scrollTo(0, sc); bindSwipes(); bindWeekSwipe();
+  foldify($("#main")); if (!doRender.once) { doRender.once = true; document.body.classList.add("intro"); setTimeout(() => document.body.classList.remove("intro"), 1200); } document.body.classList.toggle("scrolled", sc > 52); window.scrollTo(0, sc); bindSwipes(); bindWeekSwipe();
   SHEETS.forEach(S => { if (S.opt.live && !S.side) rerenderSheet(S); }); bindSwipes();
 }
 function inspHTML(c) {
@@ -1272,7 +1275,7 @@ function autoApply() {
   try {
     const c = C(), el = c.P.filter(p => E.autoOk(p, c.Ex, ST)); if (!el.length) return;
     const ids = el.map(p => applyAdj(p, true)); MEMO.k = null;
-    setTimeout(() => toast(el.length === 1 ? "Plan automatisch angepasst" : el.length + " Anpassungen übernommen", { icon: "sync", undo: () => ids.forEach(id => setAdjUndone(id, true)) }), 50);
+    setTimeout(() => toast(el.length === 1 ? "Plan angepasst" : el.length + " Anpassungen", { icon: "sync", undo: () => ids.forEach(id => setAdjUndone(id, true)) }), 50);
   } finally { autoBusy = false; }
 }
 function coachCards(c) {
@@ -1486,7 +1489,11 @@ let wasWide = WIDE(); addEventListener("resize", () => { if (WIDE() !== wasWide)
   setInterval(() => { if (today() !== lastDay) { lastDay = today(); MEMO.k = null; render(); } if (H.sync && syncState === "ok") syncNow(false); }, 60000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { if (H.sync) syncNow(false); MEMO.k = null; render(); } });
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
-    navigator.serviceWorker.register("sw.js").then(reg => {
+    /* 3.4: Neue Version übernimmt sofort. Einmal neu laden, aber nie mitten in einer Eingabe. */
+    let reloaded = false; const hadCtl = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (reloaded || !hadCtl) return; reloaded = true; const go = () => { if (typing || SHEETS.some(S => !S.side)) return setTimeout(go, 1500); location.reload(); }; go(); });
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then(reg => {
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); });
       const show = () => { if ($(".upd")) return; const d = document.createElement("div"); d.className = "upd"; d.innerHTML = `Update verfügbar <button data-act="upd">Neu laden</button>`; document.body.append(d); };
       if (reg.waiting && navigator.serviceWorker.controller) show();
       reg.addEventListener("updatefound", () => { const w = reg.installing; w && w.addEventListener("statechange", () => { if (w.state === "installed" && navigator.serviceWorker.controller) show(); }); });

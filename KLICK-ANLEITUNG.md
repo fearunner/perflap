@@ -1,6 +1,16 @@
-# Triger 3.3: Klick-Anleitung
+# Triger 3.4: Klick-Anleitung
 
 Triger ist der neue Name von Performance Lab. Deine Daten bleiben erhalten. Neuen Namen und neues Icon auf dem iPhone bekommst du so: das alte Icon löschen und die Seite in Safari wieder über **Teilen**, **Zum Home-Bildschirm** hinzufügen. Erst neu laden, dann löschen, damit nichts verloren geht. Deine Daten liegen im Browser und bleiben.
+
+## Neu in 3.4
+
+- **Updates kommen von selbst:** Eine neue Version lädt die App beim nächsten Öffnen automatisch. Das Tippen auf „Neu laden“ entfällt. Einmalig musst du die alte Version noch selbst ablösen, siehe unten.
+- **Scrollen:** Die große Überschrift wird beim Scrollen zu einer schmalen, unscharfen Kopfleiste, wie in den Apple-Apps.
+- **Maus und Trackpad:** Zeilen, Gruppen und Knöpfe reagieren auf Hover und beim Drücken.
+- **Detailleiste am Mac:** Oben rechts in der Detailleiste blendet **Ausblenden** sie aus, **Details** holt sie zurück.
+- **Excel, in beide Richtungen geprüft:** Verschiebungen werden jetzt auch beim Laden auf einem anderen Gerät wiederhergestellt. Deine eigenen Hinweise in der Spalte Hinweise (Wecker, Bad-Zeiten) bleiben beim Zurückschreiben erhalten.
+
+**Einmalig nach dem Upload:** Am Mac in Edge die Seite einmal mit Cmd + Shift + R neu laden. Auf dem iPhone die App komplett schließen (vom unteren Rand hochwischen und wegschieben) und neu öffnen. Ab dann aktualisiert sie sich selbst.
 
 ## Neu in 3.3
 

@@ -683,3 +683,83 @@ select.inp{-webkit-appearance:none;appearance:none;background-image:linear-gradi
 .toast{width:max-content;max-width:min(94vw,520px)}
 .toast .tmsg{flex:1 1 auto}
 .toast .tbtn{flex:none;white-space:nowrap}
+
+/* ================= v3.4 Feinschliff (Apple HIG) =================
+   Prinzip: ruhige Flächen, Hierarchie über Größe und Gewicht, Bewegung nur als Antwort auf Handlungen.
+   Einziges lautes Element: die Tiger-Streifen auf „Als Nächstes“. */
+:root{--r-s:10px;--r-m:14px;--r-l:20px;--dur:.18s;--hair:.5px}
+@media (min-resolution:2dppx){:root{--hair:.5px}}
+body{letter-spacing:-.003em}
+
+/* Kompakte Kopfleiste: erscheint, wenn die große Überschrift weggescrollt ist (wie UINavigationBar) */
+.navbar{position:sticky;top:0;z-index:20;height:calc(44px + var(--safe-t));margin:calc(-10px - var(--safe-t)) calc(-16px - var(--safe-r)) 0 calc(-16px - var(--safe-l));padding-top:var(--safe-t);display:flex;align-items:center;justify-content:center;
+ font:600 1.0625rem var(--txt);color:var(--ink);background:transparent;pointer-events:none;transition:background var(--dur),box-shadow var(--dur)}
+.navbar span{opacity:0;transform:translateY(6px);transition:opacity var(--dur),transform var(--dur)}
+body.scrolled .navbar{background:var(--glass);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);box-shadow:0 var(--hair) 0 var(--sep2)}
+body.scrolled .navbar span{opacity:1;transform:none}
+.navbar+.lt,.navbar+.insptog+.lt{margin-top:-34px}
+@media (min-width:1000px){.navbar{margin:-26px -34px 0;height:52px;padding:0}.navbar+.lt,.navbar+.insptog+.lt{margin-top:-26px}.shell.noinsp .content{max-width:none}.shell.noinsp .content>*:not(.navbar){max-width:860px;margin-left:auto;margin-right:auto}}
+
+/* Gruppierte Listen: Haarlinien mit Einzug, Hover nur bei Maus */
+.grp{border-radius:var(--r-m)}
+.row{transition:background-color var(--dur)}
+.row+.row::before{height:var(--hair);background:var(--sep2)}
+button.row:active,a.row:active{background:var(--fill)}
+.fold{border-radius:var(--r-m)}
+.fold-i>.grp{border-radius:var(--r-s)}
+@media (hover:hover) and (pointer:fine){
+ button.row:hover,a.row:hover{background:color-mix(in srgb,var(--ink) 4%,var(--surface))}
+ .fold-h:hover{background:color-mix(in srgb,var(--ink) 3%,transparent)}
+ .fold-h:hover .fold-c{color:var(--mute)}
+ .btn:hover{filter:brightness(1.06)}
+ .btn.ghost:hover,.btn:not(.pri):not(.ink):not(.lane):hover{background:var(--fill2);filter:none}
+ .bchip:hover{background:var(--fill2)}
+ .bchip.cta:hover{filter:brightness(1.08);background:var(--tartan)}
+ .side nav button:not([aria-current=page]):hover{background:color-mix(in srgb,var(--ink) 6%,transparent)}
+ .up-s:hover,.meal:hover,.bodyb:hover,.dm:hover,.food-n button:hover{background:var(--fill2)}
+ .dcard:hover{border-color:var(--sep2)}
+ .dcard.on:hover{border-color:var(--lane)}
+ .kpi:hover{background:color-mix(in srgb,var(--ink) 3%,var(--surface))}
+ .avatar:hover{transform:scale(1.06)}
+ .closebtn:hover,.iconbtn:hover,.sidetog:hover{background:var(--fill2);color:var(--ink)}
+ .lnk:hover{opacity:.75}
+}
+.avatar{transition:transform var(--dur)}
+.btn,.bchip,.up-s,.meal,.bodyb,.dm,.dcard,.kpi,.fold-h,.iconbtn,.closebtn{transition:transform .12s var(--ease),background-color var(--dur),filter var(--dur),border-color var(--dur)}
+.bchip:active,.up-s:active,.meal:active,.bodyb:active,.dm:active,.dcard:active,.kpi:active{transform:scale(.97)}
+
+/* Karte „Als Nächstes“: Signatur Tiger-Streifen */
+.bib{position:relative;overflow:hidden;border-radius:var(--r-l)}
+.bib .stripes{position:absolute;top:0;right:0;width:132px;height:132px;fill:var(--c,var(--tartan));opacity:.14;pointer-events:none}
+.bib .band,.bib .bd{position:relative}
+.bib .band{font-size:.8125rem}
+.bib .when{font-size:.875rem}
+.bib .acts .btn{min-height:48px;border-radius:24px}
+
+/* Offene Einheiten: neutral statt Warnfläche */
+.openbar{background:var(--surface);border-radius:var(--r-m);padding:12px 12px 12px 14px;box-shadow:inset 3px 0 0 var(--tartan)}
+.openbar span{color:var(--mute)}
+
+/* Triger-Karte */
+.brief.tri{border-radius:var(--r-l)}
+.tri-av{box-shadow:0 0 0 3px color-mix(in srgb,var(--tartan) 22%,transparent)}
+
+/* Detailleiste: Kopfzeile mit klaren Schaltflächen */
+.insp .panel-bar{position:sticky;top:-22px;z-index:3;margin:-22px -22px 8px;padding:10px 14px;background:var(--glass);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:0 var(--hair) 0 var(--sep)}
+.insp .sidetog{width:auto;padding:0 10px;gap:6px;display:inline-flex;align-items:center;font-size:.8125rem;font-weight:600}
+.insp .sidetog::after{content:"Ausblenden"}
+.insptog{width:auto;padding:0 12px;gap:6px;display:none;align-items:center;font-size:.8125rem;font-weight:600;color:var(--ink);border-radius:16px}
+@media (min-width:1000px){.insptog{display:inline-flex}.insptog::after{content:"Details"}}
+.side .sidetog::after{content:none}
+
+/* Ein einziger Einblend-Moment beim Öffnen */
+@media (prefers-reduced-motion:no-preference){
+ body.intro .content>.lt,body.intro .content>.brief,body.intro .content>.bib,body.intro .content>.openbar,body.intro .content>.fold,body.intro .content>.folds{animation:rise .5s var(--ease) both}
+ body.intro .content>.brief{animation-delay:.05s}body.intro .content>.bib{animation-delay:.1s}body.intro .content>.openbar,body.intro .content>.fold{animation-delay:.15s}body.intro .content>.folds{animation-delay:.2s}
+}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.rise{animation:none}
+@media (min-width:1000px){.insptog{z-index:25;top:12px;right:16px;height:30px;box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 var(--hair) var(--sep2)}}
+/* Eingeklappt = auch für Tastatur und Screenreader weg (nach der Animation) */
+.fold-i{visibility:visible;transition:visibility 0s}
+.fold:not(.open) .fold-i{visibility:hidden;transition:visibility 0s .28s}

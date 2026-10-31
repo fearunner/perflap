@@ -391,6 +391,8 @@ const SUBS = {
 };
 
 /* ---------- Anpassungsvorschläge ---------- */
+/* 4.1: Schmerz auf 1–5 (1 = schmerzfrei, Default). Ältere Check-ins (0–10) werden umgerechnet. */
+function painLvl(c) { if (!c || !num(c.pain)) return null; if (c.ps === 5) return Math.max(1, Math.min(5, c.pain)); const p = c.pain; return p <= 0 ? 1 : p <= 2 ? 2 : p <= 4 ? 3 : p <= 6 ? 4 : 5; }
 function proposals(B, st, t) {
   const E = effective(B, st), ctx = { B, st, t, E }, out = [];
   const touched = new Set();
@@ -424,26 +426,37 @@ function proposals(B, st, t) {
       if (ops.length) add({ key: "mc:" + t + ":" + R0.cls, sev: R0.cls === "bad" ? "bad" : "warn", title: R0.cls === "bad" ? "Morgen-Check rot: heute und morgen locker" : "Morgen-Check gelb: heute locker statt hart", why: R0.why + ". Eine Einheit entschärfen kostet keine Fitness, krank oder übermüdet hart trainieren kostet Tage.", ops });
     } }
 
+  // 0b 4.1 Schmerz im Trainingseintrag (Skala 1–5): ab 3 wird der Folgetag locker
+  { const hits = [];
+    E.filter(s => s.date >= t - 1 && s.date <= t).forEach(s => { const l = val(st, "log:" + s.id); if (l && num(l.pain) && l.pain >= 3) hits.push({ d: s.date, p: l.pain, txt: l.painTxt, name: s.name }); });
+    freeList(st).filter(f => f.date >= t - 1 && f.date <= t && num(f.pain) && f.pain >= 3).forEach(f => hits.push({ d: f.date, p: f.pain, txt: f.painTxt, name: f.name || f.sport }));
+    hits.forEach(h => { const nd = h.d + 1; if (nd < t) return;
+      const ops = E.filter(s => s.date === nd && open(s) && !s.test && (isHard(s) || ["LR", "LRM"].includes(s.code) || s.prio === "A"))
+        .map(s => ({ type: "edit", id: s.id, patch: lockerPatch(s, h.p >= 4 ? .6 : .75, "Schmerz " + h.p + "/5 am Vortag" + (h.txt && h.txt !== "ja" ? " (" + h.txt + ")" : "") + "."), note: "Schmerz am Vortag." }));
+      if (ops.length) add({ key: "pain:" + h.d + ":" + h.p, sev: h.p >= 4 ? "bad" : "warn", title: "Schmerz " + h.p + "/5: " + wdD(nd) + " locker", why: "Du hast nach „" + String(h.name).replace(/^★\s*/, "") + "“ Schmerz " + h.p + " von 5 notiert" + (h.txt && h.txt !== "ja" ? " (" + h.txt + ")" : "") + ". Ein lockerer Folgetag gibt dem Gewebe Zeit. " + (h.p >= 4 ? "Bleibt es bei 4 oder mehr, ärztlich abklären." : "Wird es nicht besser, im Check-in vermerken."), ops });
+    }); }
+
   // 1 Körpersignale aus dem Sonntags-Check-in
   const cw = weekOf(B, t), base = num(B.S.rest) ? B.S.rest : 60;
   let strained = false;
   for (const w of [cw, cw - 1]) {
     const c = val(st, "chk:" + w); if (!c) continue;
-    const red = (num(c.puls) && c.puls >= base + 8) || c.feel === 1 || (num(c.pain) && c.pain >= 5);
-    const yel = (num(c.puls) && c.puls >= base + 5) || c.feel === 2 || (num(c.pain) && c.pain >= 3);
+    const pl = painLvl(c);
+    const red = (num(c.puls) && c.puls >= base + 8) || c.feel === 1 || (pl != null && pl >= 4);
+    const yel = (num(c.puls) && c.puls >= base + 5) || c.feel === 2 || (pl != null && pl >= 3);
     if (red || yel) strained = true;
     if (red) {
       const ops = [], nx = E.filter(s => s.date >= t && s.date < t + 3 && open(s) && isHard(s));
       nx.forEach(s => { if (s.test) { const sl = findSlot(ctx, s, t + 4, t + 12, { needRep: true }); ops.push({ type: "drop", id: s.id, note: "Test verschoben: erst erholt testen." }); if (sl) ops.push(...moveOps(s, sl, "Test nach Erholung verschoben.", E)); }
         else ops.push({ type: "edit", id: s.id, patch: lockerPatch(s, .7, "Erholung nach Check-in."), note: "Check-in W" + w + " rot." }); });
-      if (num(c.pain) && c.pain >= 5) E.filter(s => s.date >= t && s.date < t + 7 && open(s) && s.sport === "Lauf" && !nx.includes(s)).forEach(s => ops.push({ type: "drop", id: s.id, note: "Laufpause bis ärztlich abgeklärt. Rad und Schwimmen nur schmerzfrei." }));
+      if (pl != null && pl >= 4) E.filter(s => s.date >= t && s.date < t + 7 && open(s) && s.sport === "Lauf" && !nx.includes(s)).forEach(s => ops.push({ type: "drop", id: s.id, note: "Laufpause bis ärztlich abgeklärt. Rad und Schwimmen nur schmerzfrei." }));
       if (ops.length) add({ key: "sig:" + w + ":r", sev: "bad", title: "Körpersignale rot: 3 Tage nur locker",
-        why: (num(c.pain) && c.pain >= 5 ? B.painLabel + " " + c.pain + "/10: Laufpause und ärztlich abklären. " : "") + "Ruhepuls " + (c.puls ?? "–") + " (Normal " + base + "), Gefühl " + (c.feel ?? "–") + "/5. Harte Einheiten der nächsten 3 Tage werden locker.", ops });
+        why: (pl != null && pl >= 4 ? "Schmerz " + pl + "/5: Laufpause und ärztlich abklären. " : "") + "Ruhepuls " + (c.puls ?? "–") + " (Normal " + base + "), Gefühl " + (c.feel ?? "–") + "/5. Harte Einheiten der nächsten 3 Tage werden locker.", ops });
     } else if (yel) {
       const ops = [], nx = E.find(s => s.date >= t && s.date < t + 4 && open(s) && isHard(s) && !s.test);
       if (nx) ops.push({ type: "edit", id: nx.id, patch: lockerPatch(nx, .8, "Warnsignal im Check-in."), note: "Check-in W" + w + " gelb." });
-      if (num(c.pain) && c.pain >= 3) E.filter(s => s.date >= t && s.date < t + 7 && open(s) && s.sport === "Lauf" && s.code === "I" && (!nx || s.id !== nx.id)).forEach(s => ops.push({ type: "edit", id: s.id, patch: lockerPatch(s, .8, "Keine Intervalle bei Schmerz."), note: "" }));
-      if (ops.length) add({ key: "sig:" + w + ":y", sev: "warn", title: "Warnsignal: nächste harte Einheit locker", why: "Ruhepuls " + (c.puls ?? "–") + ", Gefühl " + (c.feel ?? "–") + "/5" + (num(c.pain) ? ", " + B.painLabel + " " + c.pain + "/10" : "") + ". Eine Einheit entschärfen kostet nichts, ein Infekt oder eine Reizung kostet Wochen.", ops });
+      if (pl != null && pl >= 3) E.filter(s => s.date >= t && s.date < t + 7 && open(s) && s.sport === "Lauf" && s.code === "I" && (!nx || s.id !== nx.id)).forEach(s => ops.push({ type: "edit", id: s.id, patch: lockerPatch(s, .8, "Keine Intervalle bei Schmerz."), note: "" }));
+      if (ops.length) add({ key: "sig:" + w + ":y", sev: "warn", title: "Warnsignal: nächste harte Einheit locker", why: "Ruhepuls " + (c.puls ?? "–") + ", Gefühl " + (c.feel ?? "–") + "/5" + (pl != null ? ", Schmerz " + pl + "/5" : "") + ". Eine Einheit entschärfen kostet nichts, ein Infekt oder eine Reizung kostet Wochen.", ops });
     }
     break;
   }
@@ -1185,6 +1198,34 @@ function ics(B, st, t) {
 function autoOk(p, E, st) { if (!p || !p.ops || !p.ops.length || p.needsOk) return false; if (/^(man|mand|ai):/.test(p.key)) return false;
   if (st && p.ops.some(o => val(st, "nou:" + (o.type === "add" ? String(o.s.id).split("~")[0] : o.id)))) return false;
   return !p.ops.some(o => isTestOp(o, E) || (o.type !== "add" && (E.find(x => x.id === o.id) || {}).test === "race")); }
+/* ---------- 4.1 Übersicht je Sportart: im Soll (Woche, seit Planstart) und Leistung Start/heute/Ziel ---------- */
+function sportSummary(B, st, t, E) {
+  E = E || effective(B, st); const fr = freeList(st), R = derive(B, st), R0 = derive(B, {}), P = progSpan(R, B.S), P0 = progSpan(R0, B.S);
+  const ws = B.S.start + 7 * (Math.max(1, weekOf(B, t)) - 1), we = ws + 6, out = {};
+  const pace = (sport, from, to) => { let km = 0, mn = 0;
+    E.filter(s => s.sport === sport && s.date >= from && s.date <= to && s.date < t + 1).forEach(s => { const x = statusOf(st, s, t); if (x === "✓" || x === "½") { const a = actual(st, s, t); if (a.km > 0 && a.min > 0) { km += a.km; mn += a.min; } } });
+    fr.filter(f => f.sport === sport && f.date >= from && f.date <= to && f.dist > 0 && f.dur > 0).forEach(f => { km += f.dist; mn += f.dur; });
+    return km > 0 && mn > 0 ? { km, mn } : null; };
+  ["Lauf", "Rad", "Schwimmen"].forEach(k => {
+    const o = { wk: { so: 0, is: 0, km: 0, kmIs: 0 }, tot: { so: 0, is: 0, km: 0, kmIs: 0 } };
+    E.filter(s => s.sport === k && isTrain(s) && !s.dropped).forEach(s => { const a = s.date <= t ? actual(st, s, t) : { km: 0, min: 0 };
+      if (s.date >= ws && s.date <= we) { o.wk.so += s.min || 0; o.wk.km += s.km || 0; o.wk.is += a.min; o.wk.kmIs += a.km; }
+      if (s.date >= B.S.start && s.date <= t) { o.tot.so += s.min || 0; o.tot.km += s.km || 0; o.tot.is += a.min; o.tot.kmIs += a.km; } });
+    fr.filter(f => f.sport === k && f.date <= t).forEach(f => { if (f.date >= ws && f.date <= we) { o.wk.is += f.dur || 0; o.wk.kmIs += f.dist || 0; } if (f.date >= B.S.start) { o.tot.is += f.dur || 0; o.tot.kmIs += f.dist || 0; } });
+    o.pct = o.tot.so ? o.tot.is / o.tot.so : null; out[k] = o; });
+  /* Laufen: Marathon-Prognose (Riegel aus Referenz-HM) */
+  out.Lauf.perf = { lab: "Marathon-Prognose", start: P0.opt, cur: P.opt, goal: B.S.tgtM, lower: true, fmt: v => hms(v).replace(/:\d\d$/, ""), basis: R.hasTest ? "aus " + R.refTest : "aus HM-Bestzeit, bis zum ersten Test" };
+  /* Rad: Ø-Tempo der letzten 4 Wochen gegen das nötige Renntempo im Allgäu (92 km). Ohne Wattmesser grob. */
+  const bS = pace("Rad", B.S.start, B.S.start + 27), bC = pace("Rad", t - 27, t), kmh = p => p ? p.km / (p.mn / 60) : null;
+  out.Rad.perf = { lab: "Ø-Tempo (4 Wochen)", start: kmh(bS), cur: kmh(bC), goal: 92 / (MD_GOAL.bike * 24), lower: false, fmt: v => (Math.round(v * 10) / 10).toLocaleString("de-DE") + " km/h", basis: "Ziel = Renntempo Allgäu (Rad 2:52), hügelig, grobe Schätzung ohne Wattmesser" };
+  /* Schwimmen: CSS, solange kein Test: Ø-Pace der letzten 4 Wochen */
+  const D = disciplines(B, st, t, E).find(d => d.key === "swim"), sS = pace("Schwimmen", B.S.start, B.S.start + 27), sC = pace("Schwimmen", t - 27, t), p100 = p => p ? p.mn / (p.km * 10) / 1440 : null;
+  out.Schwimmen.perf = { lab: D && D.cur ? "CSS /100 m" : "Ø-Pace /100 m (4 Wochen)", start: p100(sS), cur: D && D.cur ? D.cur : p100(sC), goal: D ? D.goal : 110 / 86400, lower: true, fmt: v => mss(v) + " /100 m", basis: D && D.cur ? D.basis : "aus deinen Schwimmeinträgen, CSS-Test folgt" };
+  ["Lauf", "Rad", "Schwimmen"].forEach(k => { const p = out[k].perf; if (num(p.start) && num(p.cur) && num(p.goal) && p.start !== p.goal) { const f = p.lower ? (p.start - p.cur) / (p.start - p.goal) : (p.cur - p.start) / (p.goal - p.start); p.frac = Math.max(0, Math.min(1, f)); } else p.frac = null;
+    p.reached = num(p.cur) && num(p.goal) && (p.lower ? p.cur <= p.goal : p.cur >= p.goal); });
+  return out;
+}
+
 /* ---------- 4.0 Freitext: "Wie lief es?" automatisch auswerten ----------
    Reine Funktion, keine Netzwerkanfrage. Erkennt Struktur (WU, Intervalle, CD), Distanz, Dauer, Puls, RPE, Höhenmeter,
    Gefühl, Schmerzen (mit Verneinung), Erholung und Abbruch. Unsicheres wird als geschätzt markiert, nichts wird erfunden. */
@@ -1209,13 +1250,15 @@ function parseNote(text, o) {
   /* Abbruch */
   if (/abgebrochen|abbruch|nur (die )?hälfte|nicht fertig|vorzeitig beendet/.test(t)) r.st = "½";
   /* Schmerzfrei zuerst (Verneinung), dann Schmerz */
-  all(/(kein(e|en)?|ohne|null|nix)\s+(schmerz\w*|beschwerde\w*|probleme|wehwehchen)|schmerzfrei|beschwerdefrei|tut nichts weh/g).forEach(m => { r.pain = 0; mask(m); });
+  all(/(kein(e|en)?|ohne|null|nix)\s+(schmerz\w*|beschwerde\w*|probleme|wehwehchen)|schmerzfrei|beschwerdefrei|tut nichts weh/g).forEach(m => { r.pain = 1; mask(m); });
   const pm = t.match(/(schmerz\w*|zieh\w*|ziept?|zwickt?|stech\w*|tut weh|weh getan|drückt|beschwerde\w*|entzünd\w*)/);
   const pr = !pm && t.match(new RegExp(NOTE_REGION.source + "[^.,;]{0,25}?(\\d{1,2})\\s*\\/\\s*10|" + NOTE_REGION.source + "\\s+(meldet sich|macht probleme|zickt|muckt)"));
-  if (pr && r.pain !== 0) { r.pain = pr[2] ? Math.min(10, +pr[2]) : 1; r.painTxt = (pr[1] || pr[3]).replace(/^./, c => c.toUpperCase()); }
-  if (pm) { const w0 = Math.max(0, pm.index - 40), win = t.slice(w0, pm.index + 50), lv = win.match(/(\d{1,2})\s*\/\s*10/);
+  const p10 = v => v <= 0 ? 1 : v <= 2 ? 2 : v <= 4 ? 3 : v <= 6 ? 4 : 5; /* x/10 auf 1–5 */
+  const inten = w => /(stark|heftig|sehr|massiv|übel)/.test(w) ? 4 : /(leicht|etwas|bisschen|wenig|kaum)/.test(w) ? 2 : 2;
+  if (pr && r.pain !== 1) { r.pain = pr[2] ? p10(+pr[2]) : 2; r.painTxt = (pr[1] || pr[3]).replace(/^./, c => c.toUpperCase()); }
+  if (pm) { const w0 = Math.max(0, pm.index - 40), win = t.slice(w0, pm.index + 50), lv = win.match(/(\d{1,2})\s*\/\s*10/), l5 = win.match(/(?:schmerz\w*\s*:?\s*)?([1-5])\s*\/\s*5|schmerz\w*\s*:?\s*([1-5])(?![\d\/.,])/);
     const rgs = [...win.matchAll(new RegExp(NOTE_REGION.source, "g"))].sort((a, b) => Math.abs(w0 + a.index - pm.index) - Math.abs(w0 + b.index - pm.index)), rg = rgs[0];
-    r.pain = lv ? Math.min(10, +lv[1]) : 1; r.painTxt = rg ? rg[1].replace(/^./, c => c.toUpperCase()) : "ja"; }
+    r.pain = l5 ? +(l5[1] || l5[2]) : lv ? p10(+lv[1]) : inten(win); r.painTxt = rg ? rg[1].replace(/^./, c => c.toUpperCase()) : "ja"; }
   /* Intervalle: 5x1km@5:30, 6x400m in 1:45, 4x5min@4:20, 10x100 */
   all(/(?<![\d.:])(\d{1,2})\s*x\s*(\d+(?:\.\d+)?)\s*(km|k|meter|m|min|minuten|'|sek|s)?(?![a-z\d])/g).forEach(m0 => {
     /* Pace/Zeit nur übernehmen, wenn sie plausibel ist (sonst bleibt z. B. "in 52:30" die Gesamtdauer) */
@@ -1278,10 +1321,11 @@ function parseNote(text, o) {
     if (dur != null) r.dur = dur;
     if (r.dist != null && r.dur == null && r.pace) r.dur = swim ? r.dist * 10 * r.pace : r.dist * r.pace;
     if (r.dur != null && r.dist == null && r.pace) r.dist = Math.round((swim ? r.dur / r.pace / 10 : r.dur / r.pace) * 100) / 100;
+    if (r.dist != null && r.dur == null && !o.noEst) { r.dur = Math.round(r.dist * easy); est = true; } /* 4.1: nur Distanz genannt → Dauer mit lockerem Tempo schätzen */
   }
   if (est && r.dur != null) r.durEst = true;
   /* Gefühl: Mittel aus allen Signalen, Verneinung dreht */
-  const fs = []; NOTE_FEEL.forEach(([v, re]) => { let m; re.lastIndex = 0; while ((m = re.exec(t))) { const pre = t.slice(Math.max(0, m.index - 12), m.index); fs.push(/(nicht|kein\w*|wenig)\s*(so\s*)?$/.test(pre) ? (v >= 4 ? 2 : v <= 2 ? 3 : v) : v); } });
+  const fs = []; NOTE_FEEL.forEach(([v, re]) => { let m; re.lastIndex = 0; while ((m = re.exec(t))) { const pre = t.slice(Math.max(0, m.index - 12), m.index); if (v === 4 && /^stark/.test(m[0]) && /schmerz|weh|zieh|zwick|stech/.test(t.slice(Math.max(0, m.index - 25), m.index + 30))) continue; fs.push(/(nicht|kein\w*|wenig)\s*(so\s*)?$/.test(pre) ? (v >= 4 ? 2 : v <= 2 ? 3 : v) : v); } });
   if (fs.length) r.feel = Math.max(1, Math.min(5, Math.round(fs.reduce((a, b) => a + b, 0) / fs.length)));
   NOTE_TAGS.forEach(([lab, re]) => { if (re.test(t)) r.tags.push(lab); });
   /* Anzeige */
@@ -1292,7 +1336,7 @@ function parseNote(text, o) {
   if (r.hf != null) r.chips.push("Ø HF " + r.hf); if (r.hfmax != null) r.chips.push("max " + r.hfmax);
   if (r.rpe != null) r.chips.push("RPE " + r.rpe); if (r.hm != null) r.chips.push(r.hm + " Hm");
   if (r.feel != null) r.chips.push("Gefühl " + NOTE_FEEL_LAB[r.feel]);
-  if (r.pain === 0) r.chips.push("Schmerzfrei"); else if (r.pain) r.chips.push("Schmerz: " + r.painTxt);
+  if (r.pain === 1) r.chips.push("Schmerzfrei"); else if (r.pain) r.chips.push("Schmerz " + r.pain + "/5" + (r.painTxt && r.painTxt !== "ja" ? ": " + r.painTxt : ""));
   if (r.tags.length) r.chips.push(r.tags.join(", "));
   if (r.st === "½") r.chips.push("Abgebrochen");
   return r;
@@ -1304,6 +1348,6 @@ function segText(segs, sport) {
   return segs.map(s => s.kind === "wu" ? "WU " + (s.km != null ? d(s.km) : Math.round(s.min) + " min") : s.kind === "cd" ? "CD " + (s.km != null ? d(s.km) : Math.round(s.min) + " min")
     : s.n + "×" + (s.eachMin != null ? Math.round(s.eachMin * 10) / 10 + " min" : d(s.each)) + (s.pace ? " " + p(s.pace) : "") + (s.inT ? " in " + p(s.inT).slice(1) : "") + (s.kind === "trab" ? " Trab" : "")).join(" · ");
 }
-G.Engine = { parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
+G.Engine = { painLvl, sportSummary, parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
   util: { timeRange, hhmm, sd, serialOf, fmtD, wdD, mss, hms, r1, WD, WDL, tStart, RACE_TYPES, stageOf } };
 })(typeof window !== "undefined" ? window : globalThis);

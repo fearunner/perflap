@@ -192,9 +192,10 @@ function verdict(cw) {
   const base = num(B.S.rest) ? B.S.rest : 60; let c = null, w = cw;
   for (; w >= Math.max(1, cw - 1); w--) { c = get("chk:" + w); if (c && (num(c.puls) || num(c.feel) || num(c.pain))) break; c = null; }
   if (!c) return { cls: "", txt: "Noch kein Check-in", sub: "Sonntags 30 Sekunden" };
-  const red = (num(c.puls) && c.puls >= base + 8) || c.feel === 1 || (num(c.pain) && c.pain >= 5);
-  const yel = (num(c.puls) && c.puls >= base + 5) || c.feel === 2 || (num(c.pain) && c.pain >= 3);
-  return red ? { cls: "bad", txt: "Rot: nur locker", sub: num(c.pain) && c.pain >= 5 ? "Schmerz: ärztlich abklären" : "Erholung zuerst" } : yel ? { cls: "warn", txt: "Gelb: entschärfen", sub: "Nächste harte Einheit locker" } : { cls: "ok", txt: "Grün: Plan gilt", sub: "Check-in W" + w };
+  const pl = E.painLvl(c);
+  const red = (num(c.puls) && c.puls >= base + 8) || c.feel === 1 || (pl != null && pl >= 4);
+  const yel = (num(c.puls) && c.puls >= base + 5) || c.feel === 2 || (pl != null && pl >= 3);
+  return red ? { cls: "bad", txt: "Rot: nur locker", sub: pl != null && pl >= 4 ? "Schmerz: ärztlich abklären" : "Erholung zuerst" } : yel ? { cls: "warn", txt: "Gelb: entschärfen", sub: "Nächste harte Einheit locker" } : { cls: "ok", txt: "Grün: Plan gilt", sub: "Check-in W" + w };
 }
 const TNEED = { AC: ["time", "hf"], LTHR: ["hf"], "10K": ["time"], HM: ["time"], M: ["time"], OD: ["time"], MD: ["time"], CSS400: ["time"], CSS200: ["time"], RAD: ["hf"], BERG: ["time", "hf"] };
 function testDate(T) { const key = T.typ === "CSS200" ? T.date + "-CSS400" : T.date + "-" + T.typ; const s = C().Ex.find(x => x.tkey === key && !x.dropped); return s ? s.date : T.date; }
@@ -287,7 +288,7 @@ function briefing(c, h) {
   const focus = s ? (wy ? wy.zweck.split(/[.:]/)[0] + "." : "") : "Schlaf, Essen und lockere Bewegung machen dich schneller.";
   const hard = s && E.isHard(s), headline = sickNow ? "Heute zählt Erholung" : !s ? (h ? "Ruhetag, morgen geht es weiter" : "Ruhetag") : ready.cls === "bad" ? "Heute nur locker" : s.test === "race" ? "Renntag. Vertrau deiner Vorbereitung" : s.test === "test" ? "Testtag: ausgeruht und gleichmäßig" : s.code === "LR" ? "Heute zählt Ausdauer" : s.code === "LRM" ? "Heute zählt Ausdauer mit Marathontempo" : hard ? "Heute zählt Qualität" : "Heute locker bleiben";
   const mcR = E.morningReady(B, ST, t);
-  let x = `<section class="brief tri rise" aria-label="Gehhilfe, dein Coach"><img class="tri-av" src="gehhilfe-mark.svg" alt=""><div class="tri-tx"><span class="tri-k">Gehhilfe</span><h2>${esc(headline)}</h2><p class="br-txt">${esc(focus)} ${esc(ready.txt)}</p></div><button class="readyb ${ready.cls}" data-act="checkin" data-w="${c.cw}" aria-label="Bereitschaft ${esc(ready.lab)}, Check-in öffnen"><b>${esc(ready.lab)}</b><span>Form ${tsb > 0 ? "+" : ""}${Math.round(tsb)}</span></button>
+  let x = `<section class="brief tri rise" aria-label="Gehhilfe, dein Coach"><img class="tri-av" src="logo.png" alt=""><div class="tri-tx"><span class="tri-k">Gehhilfe</span><h2>${esc(headline)}</h2><p class="br-txt">${esc(focus)} ${esc(ready.txt)}</p></div><button class="readyb ${ready.cls}" data-act="checkin" data-w="${c.cw}" aria-label="Bereitschaft ${esc(ready.lab)}, Check-in öffnen"><b>${esc(ready.lab)}</b><span>Form ${tsb > 0 ? "+" : ""}${Math.round(tsb)}</span></button>
     <div class="tri-acts">${mcR ? "" : `<button class="bchip cta" data-act="mc" data-v="${t}">${ui("sun")}<span><b>Morgen-Check</b> · 10 Sekunden</span></button>`}${s && (s.min >= 45 || s.test) ? `<button class="bchip" data-act="fuel" data-id="${esc(s.id)}">${ui("fork")}<span>Verpflegung</span></button>` : ""}<button class="bchip" data-act="ai">${ui("sync")}<span>KI-Coach</span></button></div></section>`;
   return x;
 }
@@ -295,7 +296,7 @@ function vHeute(c) {
   const t = c.t, h = heroPick(c), v = verdict(c.cw), sick = get("sick"), sickNow = sick && num(sick.from) && !num(sick.to);
   LP = c.P;
   const open = c.Ex.filter(s => s.date < t && s.date >= t - 14 && needs(s, t) && !s.dropped);
-  let x = `<header class="lt"><div><div class="eyebrow">${esc(longDate(t))}${c.pre ? " · Start in " + (B.S.start - t) + " Tagen" : " · Woche " + c.cw + " von " + c.NW}</div><h1>Übersicht</h1></div><div class="acts"><button class="avatar" data-tab="prof" aria-label="Profil"><img src="gehhilfe.svg" alt=""></button></div></header>`;
+  let x = `<header class="lt"><div><div class="eyebrow">${esc(longDate(t))}${c.pre ? " · Start in " + (B.S.start - t) + " Tagen" : " · Woche " + c.cw + " von " + c.NW}</div><h1>Übersicht</h1></div><div class="acts"><button class="avatar" data-tab="prof" aria-label="Profil"><img src="logo.png" alt=""></button></div></header>`;
   x += banners();
   if (sickNow) { const sc = E.SICK_CAT[sick.cat], hals = sick.cat === "hals", inj = sick.cat === "verletzung" && E.REGIONS[sick.region];
     x += `<div class="banner ${hals ? "" : "err"}">${ui("sick")}<div class="tx"><b>${esc(sc ? sc.short : "Krank")} seit ${esc(U.wdD(sick.from))}</b> ${hals ? "Nur locker, höchstens 45 Minuten." : inj ? "Pausiert: " + esc(inj.aff.join(", ")) + ". Rest nur schmerzfrei." : "Kein Training, nichts zählt als verpasst."}</div><span class="bt" style="display:flex;gap:6px">${sc ? "" : `<button class="btn sm ghost" data-act="sick">Details</button>`}<button class="btn sm" data-act="sickend">Wieder gesund</button></span></div>`; }
@@ -310,17 +311,35 @@ function vHeute(c) {
        ${z.pace || z.hf ? `<div class="zone">${z.pace ? `<span>${esc(z.pace)}</span>` : ""}${z.hf ? `<span>${ui("heart")}HF ${esc(z.hf)}</span>` : ""}</div>` : ""}
        ${wake ? `<p class="wake">${esc(wake)}</p>` : ""}
        <div class="acts">${h.when === "Heute" ? `<button class="btn pri" data-act="log" data-id="${esc(s.id)}">${ui("check")}Erledigt</button>` : `<button class="btn ink" data-act="sess" data-id="${esc(s.id)}">Einheit ansehen</button>`}<button class="btn" data-act="sess" data-id="${esc(s.id)}" aria-label="Mehr zur Einheit">${ui("more")}</button></div></div></article>`;
-  } else x += `<div class="grp"><div class="empty"><b>Saison abgeschlossen</b>Lade einen neuen Plan unter Profil.</div></div>`;
+  } else x += `<div class="grp"><div class="empty"><img class="empty-logo" src="logo.png" alt=""><b>Saison abgeschlossen</b>Stark gemacht. Für die nächste Saison braucht es einen neuen Plan.</div></div>`;
   // Offene Einträge
   if (open.length) x += `<div class="openbar"><div class="tx"><b>${open.length} ${open.length === 1 ? "Einheit" : "Einheiten"} offen</b><span>${esc(open.slice(0, 3).map(s => U.WD[U.sd(s.date).getUTCDay()] + " " + s.name.replace(/^★\s*/, "")).join(", "))}${open.length > 3 ? " …" : ""}</span></div><span class="bt"><button class="btn sm" data-act="review">Ansehen</button><button class="btn sm ink" data-act="allok">${ui("check")}Alle erledigt</button></span></div>`;
   // Coach: automatische Anpassungen, danach offene Vorschläge
   const cc = coachCards(c), ccN = (cc.match(/class="prop auto/g) || []).length;
   if (ccN) x += fold("heute:Plan angepasst", "Die Gehhilfe hat deinen Plan angepasst", ccN + " neu", cc, { ic: ["sync", "var(--tartan)"], cls: "hot" });
   x += LP.map((p, i) => propCard(p, i, "")).join("");
+  x += sportsBlock(c);
   x += dashGrid(c, h);
   return x;
 }
 
+
+/* ---------- 4.1 Sportarten: im Soll (Woche, seit Planstart) und Leistung Start → heute → Ziel ---------- */
+function sportsBlock(c) {
+  if (c.pre) return "";
+  const S = E.sportSummary(B, ST, c.t, c.Ex), go = { Lauf: "m", Rad: "bike", Schwimmen: "swim" }, lab = { Lauf: "Laufen", Rad: "Radfahren", Schwimmen: "Schwimmen" };
+  const pc = x => Math.round(Math.max(0, Math.min(1, x)) * 100);
+  const amt = (k, z) => k === "Schwimmen" ? [Math.round(z.kmIs * 1000).toLocaleString("de-DE"), Math.round(z.km * 1000).toLocaleString("de-DE") + " m"] : z.km ? [de(z.kmIs), de(z.km) + " km"] : [de(z.is / 60), de(z.so / 60) + " h"];
+  const bar = (k, z) => { const q = z.km ? z.kmIs / z.km : z.so ? z.is / z.so : 0, [a, b] = amt(k, z); return `<div class="bar" aria-hidden="true"><i style="width:${pc(q)}%"></i></div><b class="num">${a}<small> / ${b}</small></b>`; };
+  const card = k => { const o = S[k], p = o.perf, st = o.pct == null ? ["", "noch kein Soll"] : o.pct >= .9 ? ["ok", "im Soll"] : o.pct >= .7 ? ["warn", "knapp unter Soll"] : ["bad", "unter Soll"];
+    return `<button class="spc" data-act="discgo" data-v="${go[k]}" style="--c:${sp(k).c};--t:${sp(k).t}" aria-label="${esc(lab[k])}: ${st[1]}, Details">
+      <span class="spc-h"><span class="spc-ic">${icon(k)}</span><b>${lab[k]}</b><span class="spc-s ${st[0]}">${o.pct == null ? st[1] : pc(o.pct) + " %"}</span></span>
+      <span class="spc-r"><span>Woche</span>${bar(k, o.wk)}</span>
+      <span class="spc-r"><span>Seit Start</span>${bar(k, o.tot)}</span>
+      <span class="spc-p"><span class="spc-pl">${esc(p.lab)}</span><span class="ptrack" aria-hidden="true"><i class="pfill" style="width:${p.frac != null ? pc(p.frac) : 0}%"></i>${p.frac != null ? `<i class="pdot" style="left:${pc(p.frac)}%"></i>` : ""}</span>
+       <span class="pv"><span>${num(p.start) ? "Start " + esc(p.fmt(p.start)) : "Start offen"}</span><b>${num(p.cur) ? "<small>heute </small>" + esc(p.fmt(p.cur)) : "noch keine Daten"}</b><span>Ziel ${esc(p.fmt(p.goal))}</span></span></span></button>`; };
+  return `<section class="sports" aria-label="Sportarten"><div class="sports-h"><h2>Sportarten</h2><span>Soll bis heute · Leistung</span></div><div class="sports-g">${["Lauf", "Rad", "Schwimmen"].map(card).join("")}</div></section>`;
+}
 
 /* ---------- v3.3 Einklappbare Gruppen (wie iOS-Einstellungen). Zustand lokal in PREF.fold, nie im Sync. ---------- */
 const FOLD_DEF = { "heute:Nächste 7 Tage": true, "fort:Disziplinen": true, "daten:Aktivitäten": true };
@@ -352,10 +371,6 @@ function dashGrid(c, h) {
     up += `<div class="up-d${d === t ? " today" : ""}"><button class="up-day" data-act="mday" data-v="${d}"><b>${esc(U.WD[U.sd(d).getUTCDay()])}</b><span>${U.sd(d).getUTCDate()}.</span></button><div class="up-it">${ab.map(a => `<span class="abpill ab-${a.kind}">${esc(E.ABS_KIND[a.kind].lab)}</span>`).join("")}${it.length ? it.map(s => { const st = s.isFree ? "✓" : E.statusOf(ST, s, t); return `<button class="up-s" data-act="sess" data-id="${esc(s.id)}" style="--c:${sp(s.sport).c}"><i></i><span>${esc(s.name.replace(/^★\s*/, ""))}</span><small>${esc(s.km ? kmStr(s.km, s.sport) : durShort(s.min))}${st === "✓" ? " ✓" : st === "✗" ? " ✗" : ""}</small></button>`; }).join("") : ab.length ? "" : `<span class="muted" style="font-size:.8125rem">Ruhetag</span>`}</div></div>`; }
   const n7 = (() => { let n = 0; for (let d = t; d < t + 7; d++) n += dayItems(c, d).filter(s => E.isTrain(s) && !s.dropped).length; return n; })();
   g += tile("t-up", `<h3>Nächste 7 Tage</h3>`, `<div class="up">${up}</div>`, `<button class="lnk" data-tab="plan">Ganzer Plan ${ui("chev")}</button>`, n7 + " Einheiten", ["cal", "var(--lane)"]);
-  // Woche
-  const kv = (lab, col, a, b, u) => `<div class="k"><span><i style="--c:${col}"></i>${lab}</span><b>${a}<small> / ${b}${u}</small></b></div>`;
-  g += tile("t-week", `<h3>Diese Woche</h3>`, `<div class="trackcard flat">${trackSvg(W.so ? W.is / W.so : 0, W.keyTot ? W.keyDone / W.keyTot : 0, "Woche")}<div class="tstat">${kv("Stunden", "var(--tartan)", de(W.is / 60), de(W.so / 60), " h")}${kv("Schlüssel", "var(--gold-s)", W.keyDone, W.keyTot, "")}<button class="light ${v.cls}" data-act="checkin" data-w="${c.cw}"><i></i><span>${esc(v.txt)}</span></button></div></div>
-    <div class="spl">${["Lauf", "Rad", "Schwimmen"].map(k => { const z = W.sp[k] || { km: 0, kmIs: 0 }; return `<span style="--c:${sp(k).c}">${icon(k)}${de(z.kmIs)}<small>/${de(z.km)} km</small></span>`; }).join("")}</div>`, "", Math.round(W.so ? W.is / W.so * 100 : 0) + " % · " + W.keyDone + "/" + W.keyTot + " Schlüssel", ["target", "var(--tartan)"]);
   // Ernährung + Tagebuch
   const N = kg ? E.dayNeeds(E.dayType(c.Ex, ST, t), kg) : null, fd = get("fd:" + t) || {}, filled = MEALS.slice(0, 4).filter(([k]) => (fd[k] || "").trim()).length;
   g += tile("t-food", `<h3>Ernährung</h3>`, N ? `<div class="food-n"><button data-act="nut" data-v="${t}"><b>${N.khT}<small> g</small></b><span>Kohlenhydrate · ${esc(N.lab)}</span></button><button data-act="nut" data-v="${t}"><b>${N.pT}<small> g</small></b><span>Eiweiß</span></button></div>
@@ -364,10 +379,8 @@ function dashGrid(c, h) {
   // Körper: Morgen-Check + Gewicht
   const R0 = E.morningReady(B, ST, t), WT = E.weightTrend(ST, t);
   g += tile("t-body", `<h3>Körper</h3>`, `<div class="body2"><button class="bodyb ${R0 ? R0.cls : ""}" data-act="mc" data-v="${t}"><span>Morgen-Check</span><b>${R0 ? (R0.cls === "ok" ? "Bereit" : R0.cls === "warn" ? "Gelb" : "Rot") : "Offen"}</b><small>${esc(R0 ? R0.why : "10 Sekunden, steuert den Plan")}</small></button>
-    <button class="bodyb" data-act="wt"><span>Gewicht (Trend)</span><b>${WT ? de(WT.cur) + " kg" : kg ? de(kg) + " kg" : "–"}</b><small>${WT && WT.n >= 3 ? (WT.wk > 0 ? "+" : "") + de(WT.wk, 2) + " kg/Woche" : "Verlauf ab 3 Werten"}</small></button></div>`, "", R0 ? (R0.cls === "ok" ? "Bereit" : R0.cls === "warn" ? "Gelb" : "Rot") : "Morgen-Check offen", ["heart", "var(--bad)"]);
-  // Fortschritt alle Disziplinen
-  const D = E.disciplines(B, ST, t, c.Ex), ic = { hm: "Lauf", m: "Lauf", swim: "Schwimmen", bike: "Rad", od: "Triathlon", md: "Triathlon" };
-  g += tile("t-prog", `<h3>Fortschritt</h3>`, `<div class="dmini">${D.filter(d => ["hm", "m", "swim", "bike", "md"].includes(d.key)).map(d => { const ok = d.gap != null && d.gap <= 0; return `<button class="dm" data-act="discgo" data-v="${d.key}"><span style="color:${sp(ic[d.key]).c}">${icon(ic[d.key])}</span><span class="dm-t"><b>${esc(d.lab)}</b><small>${esc(d.curTxt)}</small></span><span class="dm-g ${d.gap == null ? "" : ok ? "ok" : "warn"}">${esc(d.goalTxt || (d.goal ? U.hms(d.goal).replace(/:00$/, "") : ""))}</span></button>`; }).join("")}</div>`, `<button class="lnk" data-tab="fort">Leistung ${ui("chev")}</button>`, (D.find(d => d.key === "hm") || {}).curTxt ? "HM " + D.find(d => d.key === "hm").curTxt : "", ["prog", "var(--other)"]);
+    <button class="bodyb" data-act="wt"><span>Gewicht (Trend)</span><b>${WT ? de(WT.cur) + " kg" : kg ? de(kg) + " kg" : "–"}</b><small>${WT && WT.n >= 3 ? (WT.wk > 0 ? "+" : "") + de(WT.wk, 2) + " kg/Woche" : "Verlauf ab 3 Werten"}</small></button>
+    <button class="bodyb ${v.cls}" data-act="checkin" data-w="${c.cw}"><span>Wochen-Check-in</span><b>${esc(v.txt.split(":")[0])}</b><small>Ruhepuls, Schmerz, Gefühl</small></button></div>`, "", R0 ? (R0.cls === "ok" ? "Bereit" : R0.cls === "warn" ? "Gelb" : "Rot") : "Morgen-Check offen", ["heart", "var(--bad)"]);
   // Abwesenheiten + Rennen
   const A = E.absences(ST, t).filter(a => (a.to != null ? a.to : t) >= t).slice(0, 3), fut = B.S.events.filter(e => e.date >= t).sort((a, b) => a.date - b.date);
   g += tile("t-abs", `<h3>Termine</h3>`, `<div class="cd" role="list">${fut.map((e, i) => `<div class="it${i ? "" : " first"}" role="listitem"><b>${e.date - t}</b><span>Tage · ${esc(String(e.name).replace("Olympische Distanz", "OD").replace("Triathlon Classic", "").replace("Marathon ", ""))}</span></div>`).join("")}</div>
@@ -377,6 +390,8 @@ function dashGrid(c, h) {
   if (nt) g += tile("t-test", `<h3>Nächster Test</h3>`, `<button class="row" data-act="test" data-k="${esc(nt.key)}" style="border-radius:12px"><span class="badge-ic" style="--c:var(--tartan);--t:var(--tartan-t)">${ui("star")}</span><span class="tx"><span class="t1">${esc(nt.name.replace(/:? ?400 m/, ""))}</span><span class="t2" style="white-space:normal">${esc(nt.how)}</span></span><span class="rv">${nt.ed - t === 0 ? "heute" : nt.ed - t}<small>${nt.ed - t === 0 ? "" : nt.ed - t === 1 ? "Tag" : "Tage"}</small></span></button>`, "", nt.ed - t === 0 ? "heute" : "in " + (nt.ed - t) + " Tagen", ["star", "var(--tartan)"]);
   // Sonntag: Check-in fällig
   const chk = get("chk:" + c.cw), due = !c.pre && U.sd(t).getUTCDay() === 0 && !(chk && num(chk.puls));
+  const adj = Object.keys(ST).filter(k => k.startsWith("adj:")).map(k => ST[k].v).filter(a => a && !a.xl).sort((a, b) => b.created - a.created);
+  if (adj.length) g += tile("t-adj", `<h3>Anpassungen</h3>`, `<div class="grp">${adj.slice(0, 8).map(a => `<div class="row plain" style="${a.undone ? "opacity:.5" : ""}"><span class="tx"><span class="t1">${esc(a.title)}</span><span class="t2">${new Date(a.created).toLocaleDateString("de-DE")}${a.auto ? " · automatisch" : ""}${a.undone ? " · zurückgenommen" : ""}</span></span><button class="btn sm ghost" data-act="${a.undone ? "redoadj" : "undoadj"}" data-v="${esc(a.id)}">${a.undone ? "Anwenden" : "Zurück"}</button></div>`).join("")}</div>`, "", adj.filter(a => !a.undone).length + " aktiv", ["sync", "var(--lane)"]);
   return (due ? `<div class="prop" style="border-left-color:var(--gold-s)"><span class="k" style="color:var(--gold-ink)">${ui("heart")}Sonntag</span><h3>Check-in für Woche ${c.cw}</h3><p>Ruhepuls, Schmerz, Gefühl und dein Garmin-VO2max. Dauert 30 Sekunden und steuert die Ampel.</p><div class="acts"><button class="btn sm pri" data-act="checkin" data-w="${c.cw}">Check-in starten</button></div></div>` : "") + `<div class="folds">${g}</div>`;
 }
 /* ---------- Video: Vorschau, Einbettung erst nach Tippen ---------- */
@@ -455,7 +470,7 @@ function sessView(id, D) {
 }
 function prefill(s, c) {
   const l = log(s), a = E.actual(ST, s, c.t), z = zoneOf(s, c), st = E.statusOf(ST, s, c.t), had = st === "✓" || st === "½";
-  return { st: st === "½" ? "½" : "✓", dur: had ? Math.round(a.min) : s.min || 30, dist: had ? a.km : s.km || 0, hf: num(l.hf) ? l.hf : null, hfmax: l.hfmax ?? null, rpe: num(l.rpe) ? l.rpe : null, feel: l.feel ?? null, shoe: l.shoe || "", hm: l.hm ?? null, pull: l.pull ?? null, note: l.note || "", hfHint: hfMid(z), more: false };
+  return { st: st === "½" ? "½" : "✓", dur: had ? Math.round(a.min) : s.min || 30, dist: had ? a.km : s.km || 0, hf: num(l.hf) ? l.hf : null, hfmax: l.hfmax ?? null, rpe: num(l.rpe) ? l.rpe : null, feel: l.feel ?? null, shoe: l.shoe || "", hm: l.hm ?? null, pull: l.pull ?? null, pain: num(l.pain) ? l.pain : 1, note: l.note || "", hfHint: hfMid(z), more: false };
 }
 function stepper(f, val, o) {
   return `<div class="stepper"><button type="button" data-act="step" data-f="${f}" data-v="-${o.step}" aria-label="${esc(o.lab)} weniger">−</button><input id="in-${f}" data-in="${f}" inputmode="${o.mode || "decimal"}" autocomplete="off" value="${esc(val)}" placeholder="${esc(o.ph || "")}" aria-label="${esc(o.lab)}"><button type="button" data-act="step" data-f="${f}" data-v="${o.step}" aria-label="${esc(o.lab)} mehr">+</button></div>`;
@@ -469,6 +484,10 @@ function derivedTxt(D, sport) {
   if (sport === "Schwimmen") return `<b>${U.mss(m / (km * 10) / 1440)}</b> /100 m`;
   return "";
 }
+/* 4.1: Schmerz 1–5. 1 = schmerzfrei ist immer voreingestellt, ändern nur aktiv. Ab 3 schlägt die App einen lockeren Folgetag vor. */
+const PAIN_LAB = ["", "schmerzfrei", "leicht spürbar", "störend", "deutlich", "stark"];
+function painScale(v, lab) { v = num(v) ? v : 1; const col = n => n === 1 ? "var(--ok)" : n === 2 ? "var(--ok)" : n === 3 ? "var(--warn)" : "var(--bad)";
+  return `<div class="field painf"><div class="fl"><span>${esc(lab || "Schmerz")}</span><b>${v} · ${PAIN_LAB[v]}${v >= 3 ? ", Folgetag wird locker" : ""}</b></div><div class="scale s5" role="radiogroup" aria-label="Schmerz 1 bis 5">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" aria-checked="${v === n}" class="${v === n ? "on" : ""}" style="--sc:${col(n)}" data-act="setf" data-f="pain" data-v="${n}">${n}</button>`).join("")}</div></div>`; }
 function rpeScale(f, v, lab) {
   const col = n => n <= 3 ? "var(--ok)" : n <= 6 ? "var(--warn)" : "var(--bad)";
   return `<div class="field"><div class="fl"><span>${lab || "Anstrengung (RPE)"}</span><b>${num(v) ? ["", "sehr leicht", "leicht", "locker", "moderat", "etwas hart", "hart", "sehr hart", "sehr hart", "maximal", "maximal"][v] : "1 leicht … 10 maximal"}</b></div><div class="scale" role="radiogroup" aria-label="${esc(lab || "Anstrengung")}">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<button type="button" role="radio" aria-checked="${v === n}" class="${v === n ? "on" : ""}" style="--sc:${col(n)}" data-act="setf" data-f="${f}" data-v="${n}">${n}</button>`).join("")}</div></div>`;
@@ -483,6 +502,7 @@ function logForm(s, D, c) {
   if (endu) x += `<div class="field"><div class="fl"><span>Distanz</span><b>${swim ? "Meter" : "km"}</b></div>${stepper("dist", fmtDistIn(F.dist, sport), { step: swim ? 100 : sport === "Rad" ? 5 : .5, lab: "Distanz" })}<div class="derived" id="derived" aria-live="polite">${derivedTxt(F, sport)}</div></div>`;
   if (endu && !swim) x += `<div class="field"><div class="fl"><span>Ø Herzfrequenz</span><b>bpm, optional</b></div>${stepper("hf", F.hf ?? "", { step: 1, lab: "Durchschnittspuls", mode: "numeric", ph: F.hfHint ? String(F.hfHint) : "–" })}</div>`;
   x += rpeScale("rpe", F.rpe);
+  x += painScale(F.pain);
   x += `<button type="button" class="more-tog" data-act="setf" data-f="more" data-v="${F.more ? 0 : 1}" aria-expanded="${!!F.more}">${F.more ? "Weniger" : "Mehr Details"}</button>`;
   if (F.more) {
     if (sport === "Lauf") x += `<div class="field"><div class="fl"><span>Max HF</span><b>optional</b></div>${stepper("hfmax", F.hfmax ?? "", { step: 1, lab: "Maximalpuls", mode: "numeric", ph: "–" })}</div>`;
@@ -501,7 +521,7 @@ function noteField(F, sport) {
   return `<div class="field notef"><div class="fl"><span>Wie lief es?</span><b>füllt die Felder selbst</b></div><textarea class="inp" id="in-note" data-in="note" rows="3" maxlength="600" placeholder="${esc(NOTE_PH[sport] || NOTE_PH.Lauf)}" aria-describedby="parsed">${esc(F.note)}</textarea><div class="parsed" id="parsed" aria-live="polite">${parsedHTML(F)}</div></div>`;
 }
 function parsedHTML(F) { const P = F.P; if (!P || !P.chips || !P.chips.length) return ""; return `<span class="pl">${ui("check")}Erkannt</span>${P.chips.map(c => `<span class="pc">${esc(c)}</span>`).join("")}`; }
-const NOTE_KEYS = ["dur", "dist", "hf", "hfmax", "rpe", "feel", "hm"];
+const NOTE_KEYS = ["dur", "dist", "hf", "hfmax", "rpe", "feel", "hm", "pain"];
 function easyPaceFor(s, sport) { if (s && s.km && s.min && sport === "Lauf") return Math.max(4.5, Math.min(7.5, s.min / s.km + .25)); return null; }
 function applyNote(cur, opts) {
   const F = cur.D.f; if (!F) return; const s = formS(cur), sport = s ? s.sport : F.sport;
@@ -516,11 +536,12 @@ function applyNote(cur, opts) {
   syncInputs(F, sport);
   $$("[data-act=setf][data-f=rpe]", root).forEach(b => { const on = +b.dataset.v === F.rpe; b.setAttribute("aria-checked", on); b.classList.toggle("on", on); });
   $$("[data-act=setf][data-f=feel]", root).forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === F.feel));
+  const pf = $(".painf", root); if (pf) pf.outerHTML = painScale(F.pain);
   $$("[data-act=setf][data-f=st]", root).forEach(b => b.setAttribute("aria-pressed", b.dataset.v === F.st));
   const pz = $("#parsed", root); if (pz) pz.innerHTML = parsedHTML(F);
 }
-const noteExtra = F => { const P = F.P || (F.note ? E.parseNote(F.note, { sport: F.sport }) : null); if (!P) return { pain: undefined, painTxt: undefined, tags: undefined, segs: undefined };
-  return { pain: P.pain, painTxt: P.painTxt, tags: P.tags && P.tags.length ? P.tags : undefined, segs: P.segs && P.segs.length ? P.segs.map(({ pos, ...x }) => x) : undefined }; };
+const noteExtra = F => { const P = F.P || (F.note ? E.parseNote(F.note, { sport: F.sport }) : null) || {};
+  return { pain: num(F.pain) ? F.pain : 1, painTxt: num(F.pain) && F.pain > 1 ? P.painTxt : undefined, tags: P.tags && P.tags.length ? P.tags : undefined, segs: P.segs && P.segs.length ? P.segs.map(({ pos, ...x }) => x) : undefined }; };
 function missForm(s, D, c) {
   const l = log(s), why = D.why || (l.st === "✗" ? l.why : "");
   let x = `<p style="color:var(--ink2);margin:0 2px 12px">Was ist passiert? Die App schlägt danach vor, wie es weitergeht.</p><div class="chips" role="group" aria-label="Grund">${[["zeit", "Keine Zeit", "cal"], ["muede", "Müde oder Schmerz", "heart"], ["krank", "Krank", "sick"], ["reise", "Reise", "plane"]].map(([k, lab, ic]) => `<button type="button" class="chip" data-act="why" data-id="${esc(s.id)}" data-v="${k}" aria-pressed="${why === k}">${ui(ic)}${lab}</button>`).join("")}</div>`;
@@ -539,7 +560,7 @@ function missForm(s, D, c) {
 
 /* ---------- Freies Training ---------- */
 function freeForm(D) {
-  const F = D.f || (D.f = { sport: "Lauf", date: today(), dur: 45, dist: null, hf: null, rpe: null, hm: null, name: "", note: "" });
+  const F = D.f || (D.f = { sport: "Lauf", date: today(), dur: 45, dist: null, hf: null, rpe: null, hm: null, name: "", note: "", pain: 1 });
   const swim = F.sport === "Schwimmen";
   let x = `<div class="sh-head"><span class="badge-ic" style="--c:${sp(F.sport).c};--t:${sp(F.sport).t}">${icon(F.sport)}</span><div class="tx"><h2 class="sheet-title" tabindex="-1">${D.edit ? "Training bearbeiten" : "Training hinzufügen"}</h2><p>Nicht geplant, zählt trotzdem für Umfang und Form</p></div><button class="closebtn" data-act="close" aria-label="Schließen">${ui("x")}</button></div>`;
   x += `<div class="chipline" style="margin-bottom:12px"><div class="chips" style="flex-wrap:nowrap">${["Lauf", "Rad", "Schwimmen", "Kraft", "Mobility", "Sonstiges"].map(k => `<button type="button" class="chip" data-act="setf" data-f="sport" data-v="${k}" aria-pressed="${F.sport === k}">${icon(k)}${sp(k).lab}</button>`).join("")}</div></div>`;
@@ -550,6 +571,7 @@ function freeForm(D) {
   if (F.sport === "Rad" || F.sport === "Sonstiges") x += `<div class="field"><div class="fl"><span>Höhenmeter</span><b>optional</b></div>${stepper("hm", F.hm ?? "", { step: 50, lab: "Höhenmeter", mode: "numeric", ph: "–" })}</div>`;
   if (!["Kraft", "Mobility"].includes(F.sport)) x += `<div class="field"><div class="fl"><span>Ø Herzfrequenz</span><b>optional</b></div>${stepper("hf", F.hf ?? "", { step: 1, lab: "Durchschnittspuls", mode: "numeric", ph: "–" })}</div>`;
   x += rpeScale("rpe", F.rpe);
+  x += painScale(F.pain);
   x += `<div class="sh-foot"><button class="btn" data-act="close">Abbrechen</button><button class="btn pri" data-act="savefree">${ui("check")}Speichern</button></div>`;
   return x;
 }
@@ -557,10 +579,10 @@ function freeForm(D) {
 /* ---------- Check-in ---------- */
 function checkinForm(D) {
   const w = D.w, c0 = get("chk:" + w) || {}, base = num(B.S.rest) ? B.S.rest : 60;
-  const F = D.f || (D.f = { puls: c0.puls ?? null, pain: c0.pain ?? null, feel: c0.feel ?? null, vo2: (E.vo2List(ST).slice(-1)[0] || {}).v ?? null, vo2touched: false });
+  const F = D.f || (D.f = { puls: c0.puls ?? null, pain: E.painLvl(c0) ?? 1, feel: c0.feel ?? null, vo2: (E.vo2List(ST).slice(-1)[0] || {}).v ?? null, vo2touched: false });
   let x = `<div class="sh-head"><span class="badge-ic" style="--c:var(--tartan);--t:var(--tartan-t)">${ui("heart")}</span><div class="tx"><h2 class="sheet-title" tabindex="-1">Check-in Woche ${w}</h2><p>30 Sekunden. Steuert Ampel und Vorschläge.</p></div><button class="closebtn" data-act="close" aria-label="Schließen">${ui("x")}</button></div>`;
   x += `<div class="field"><div class="fl"><span>Ruhepuls morgens, Ø der Woche</span><b>normal ${base}</b></div>${stepper("puls", F.puls ?? "", { step: 1, lab: "Ruhepuls", mode: "numeric", ph: String(base) })}</div>`;
-  x += `<div class="field"><div class="fl"><span>${esc(B.painLabel)}</span><b>${num(F.pain) ? F.pain + " von 10" : "0 = nichts"}</b></div><div class="scale" style="grid-template-columns:repeat(11,1fr)">${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<button type="button" class="${F.pain === n ? "on" : ""}" style="--sc:${n <= 2 ? "var(--ok)" : n <= 4 ? "var(--warn)" : "var(--bad)"}" data-act="setf" data-f="pain" data-v="${n}" aria-pressed="${F.pain === n}">${n}</button>`).join("")}</div></div>`;
+  x += painScale(F.pain, "Schmerz (z. B. Hallux)");
   x += `<div class="field"><div class="fl"><span>Gefühl</span></div><div class="chips">${[[1, "Platt"], [2, "Müde"], [3, "Okay"], [4, "Gut"], [5, "Top"]].map(([n, lab]) => `<button type="button" class="chip" data-act="setf" data-f="feel" data-v="${n}" aria-pressed="${F.feel === n}">${lab}</button>`).join("")}</div></div>`;
   x += `<div class="field"><div class="fl"><span>VO2max laut Garmin</span><b>optional</b></div>${stepper("vo2", F.vo2 ?? "", { step: 1, lab: "VO2max", mode: "numeric", ph: "–" })}</div>`;
   x += `<div class="sh-foot"><button class="btn" data-act="close">Abbrechen</button><button class="btn pri" data-act="savechk" data-w="${w}">${ui("check")}Speichern</button></div>`;
@@ -812,7 +834,7 @@ function vProg(c) {
   const t = c.t, F = c.F, TR = c.TR, R = c.R, today = F.find(x => x.d === t) || F[F.length - 1];
   const vo2 = TR.vo2, vd = TR.vdot, tg = E.vdotTargets(B), lastVo2 = vo2.slice(-1)[0], lastVd = vd.slice(-1)[0];
   const tsbTxt = !today ? "" : today.tsb > 5 ? ["frisch", "ok"] : today.tsb > -10 ? ["ausgewogen", "ok"] : today.tsb > -25 ? ["im Aufbau", "warn"] : ["sehr müde", "bad"];
-  let x = `<header class="lt"><div><div class="eyebrow">Prognose, Verbesserungen, Form</div><h1>Leistung</h1></div><div class="acts"><button class="iconbtn" data-act="vo2" aria-label="VO2max eintragen">${ui("plus")}</button></div></header>`;
+  let x = `<header class="lt"><div><div class="eyebrow">Prognose, Form und Aktivitäten</div><h1>Fortschritt</h1></div><div class="acts"><button class="iconbtn" data-act="imp" aria-label="Aktivitäten importieren">${ui("down")}</button><button class="iconbtn" data-act="vo2" aria-label="VO2max eintragen">${ui("plus")}</button></div></header>`;
   x += `<div class="kpis" style="margin-top:0">
     <button class="kpi" data-act="info" data-v="form"><span class="info">${ui("info")}</span><div class="kl">Form</div><div class="kv">${today ? (today.tsb > 0 ? "+" : "") + Math.round(today.tsb) : "–"}</div><div class="ks ${tsbTxt[1] || ""}">${tsbTxt[0] || ""}</div></button>
     <button class="kpi" data-act="info" data-v="form"><span class="info">${ui("info")}</span><div class="kl">Fitness</div><div class="kv">${today ? Math.round(today.ctl) : "–"}</div><div class="ks">Ermüdung ${today ? Math.round(today.atl) : "–"}</div></button>
@@ -1005,7 +1027,7 @@ function vProf(c) {
   const sick = get("sick"), sickNow = sick && num(sick.from) && !num(sick.to), standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone, ios = /iPhone|iPad/.test(navigator.userAgent);
   const row = (ic, col, t1, t2, act, extra) => `<button class="row" data-act="${act}" ${extra || ""}><span class="badge-ic" style="--c:${col};--t:color-mix(in srgb,${col} 14%,var(--surface))">${ui(ic)}</span><span class="tx"><span class="t1">${t1}</span>${t2 ? `<span class="t2">${t2}</span>` : ""}</span>${ui("chev", "chev")}</button>`;
   let x = `<header class="lt"><div><div class="eyebrow">Einstellungen und Daten</div><h1>Profil</h1></div></header>`;
-  x += `<div class="prof-hero"><span class="av logo-av"><img src="gehhilfe-mark.svg" alt=""></span><div class="tx" style="flex:1"><b style="font-size:1.0625rem">Saison 2026/27</b><div class="muted" style="font-size:.8125rem">${B.plan.length} Einheiten · Plan vom ${new Date(B.importedAt).toLocaleDateString("de-DE")}</div></div>${syncPill()}</div>`;
+  x += `<div class="prof-hero"><span class="av logo-av"><img src="logo.png" alt=""></span><div class="tx" style="flex:1"><b style="font-size:1.0625rem">Saison 2026/27</b><div class="muted" style="font-size:.8125rem">${B.plan.length} Einheiten · Plan vom ${new Date(B.importedAt).toLocaleDateString("de-DE")}</div></div>${syncPill()}</div>`;
   if (!standalone) x += `<div class="banner info" style="margin-top:12px">${ui("down")}<div class="tx"><b>Als App installieren.</b> ${ios ? "Safari: Teilen, dann Zum Home-Bildschirm." : "Chrome: Menü ⋮, Speichern und teilen, Seite als App installieren."}</div></div>`;
   const absN = E.absences(ST, c.t).filter(a => (a.to != null ? a.to : c.t) >= c.t).length;
   x += `<div class="sec"><h2>Unterwegs und krank</h2></div><div class="grp">${row("cal", "var(--lane)", "Alle Abwesenheiten", absN ? absN + " aktuell oder geplant" : "Liste, bearbeiten, löschen", "abs")}${row("plane", "var(--lane)", "Reise eintragen", trv.length ? trv.map(([, v]) => U.fmtD(v.from) + "–" + U.fmtD(v.to) + (v.eq ? " (" + E.eqText(E.tripEq(v)) + ")" : "")).join(", ") : "Dienstreise mit Ausstattung, Ersatzeinheiten", "travel")}
@@ -1013,14 +1035,12 @@ function vProf(c) {
   x += `<div class="sec"><h2>Coach</h2></div><div class="grp"><div class="row plain"><span class="badge-ic" style="--c:var(--lane);--t:var(--lane-t)">${ui("sync")}</span><span class="tx"><span class="t1">Automatisch anpassen</span><span class="t2" style="white-space:normal">${AUTO() ? "An: Regeln wirken sofort, Tests und Rennen fragen nach" : "Aus: jeder Vorschlag braucht deine Bestätigung"}</span></span><button class="switch" role="switch" aria-checked="${AUTO()}" aria-label="Automatisch anpassen" data-act="autotog"><i></i></button></div>
     <div class="row plain"><span class="badge-ic" style="--c:var(--lane);--t:var(--lane-t)">${ui("sync")}</span><span class="tx"><span class="t1">KI-Coach</span><span class="t2" style="white-space:normal">${AION() ? "An: Prüfung der nächsten 14 Tage auf Knopfdruck" : "Aus: keine Daten verlassen das Gerät"}</span></span><button class="switch" role="switch" aria-checked="${AION()}" aria-label="KI-Coach" data-act="aitog"><i></i></button></div>
     ${AION() ? `<button class="row" data-act="ai"><span class="badge-ic" style="--c:var(--ok);--t:var(--ok-t)">${ui("check")}</span><span class="tx"><span class="t1">Plan jetzt prüfen lassen</span><span class="t2">Vorschlag mit Leitplanken, du bestätigst</span></span>${ui("chev", "chev")}</button><button class="row" data-act="aikey"><span class="badge-ic" style="--c:var(--mute);--t:var(--fill)">${ui("shield")}</span><span class="tx"><span class="t1">API-Schlüssel (optional)</span><span class="t2">${PREF.aikey ? "Hinterlegt …" + esc(PREF.aikey.slice(-4)) : "Nicht hinterlegt, Weg A genügt"}</span></span>${ui("chev", "chev")}</button>` : ""}</div>`;
-  x += `<div class="sec"><h2>Anpassungen</h2><span class="muted" style="font-size:.8125rem">${adj.filter(a => !a.undone).length} aktiv</span></div><div class="grp">${adj.length ? adj.slice(0, 8).map(a => `<div class="row plain" style="${a.undone ? "opacity:.5" : ""}"><span class="tx"><span class="t1">${esc(a.title)}</span><span class="t2">${new Date(a.created).toLocaleDateString("de-DE")}${a.auto ? " · automatisch" : ""}${a.undone ? " · zurückgenommen" : ""}</span></span><button class="btn sm ghost" data-act="${a.undone ? "redoadj" : "undoadj"}" data-v="${esc(a.id)}">${a.undone ? "Anwenden" : "Zurück"}</button></div>`).join("") : `<div class="empty">Noch keine Anpassungen.</div>`}</div>`;
   const linz = c.Ex.find(s => s.test === "race" && s.typ === "M" && s.date >= c.t);
   x += `<div class="sec"><h2>Ernährung</h2></div><div class="grp">${row("fork", "var(--ok)", "Körpergewicht", KG() ? de(KG()) + " kg" : "Noch nicht eingetragen", "kg")}${row("fork", "var(--ok)", "Ernährung heute", "Tagesbedarf und Beispielmahlzeiten", "nut", `data-v="${c.t}"`)}${linz ? row("flag", "var(--gold-s)", "Verpflegungsplan " + esc(linz.name.replace(/^★\s*/, "").replace(/^Marathon\s*/, "")), "Gel- und Trinkplan für das Rennen", "fuel", `data-id="${esc(linz.id)}"`) : ""}${row("book", "var(--ok)", "Ernährung: Quellen", "ACSM, IOC, ISSN", "info", 'data-v="food"')}</div>`;
-  x += `<div class="sec"><h2>Mac und iPhone</h2></div><div class="grp">${FSA ? (H.sync ? row("sync", "var(--ok)", "Jetzt abgleichen", esc(syncMsg + " · " + H.sync.name), "syncnow") + row("x", "var(--mute)", "Sync trennen", "Datei bleibt erhalten", "syncoff") : row("sync", "var(--lane)", "Sync-Datei anlegen", "Einmal in iCloud Drive speichern, danach automatisch", "synccreate") + row("file", "var(--lane)", "Vorhandene Sync-Datei wählen", "", "syncopen"))
-    : row("down", "var(--lane)", "Stand laden", "Sync-Datei aus iCloud Drive öffnen", "loadjson") + row("up", "var(--lane)", "Stand sichern", "In Dateien sichern und ersetzen", "sharejson")}</div>`;
-  x += `<div class="sec"><h2>Export und Sicherung</h2></div><div class="grp">${row("file", "var(--ok)", "Export (Excel)", "Plan, Ist-Werte, Wochen, Tests, Tagebuch" + (H.exp ? " · " + esc(expLine()) : ""), "xlsx")}${EXP_OK ? (H.exp ? row("x", "var(--mute)", "Automatischen Export beenden", esc(H.exp.name) + " bleibt, wie sie ist", "expoff") : row("sync", "var(--ok)", "Automatisch exportieren", "Einmal Speicherort wählen, danach nach jeder Änderung", "exppick")) : ""}${row("cal", "var(--accent-ink)", "Kalender (.ics)", "Ab heute, inklusive Anpassungen", "ics")}${row("up", "var(--mute)", "Sicherung speichern", "Kompletter Stand als Datei", "sharejson")}${row("down", "var(--mute)", "Sicherung laden", "Führt mit dem Stand hier zusammen", "loadjson")}</div>`;
+  x += `<div class="sec"><h2>Sync und Export</h2></div><div class="grp">${FSA ? (H.sync ? row("sync", "var(--ok)", "Jetzt abgleichen", esc(syncMsg + " · " + H.sync.name), "syncnow") + row("x", "var(--mute)", "Sync trennen", "Datei bleibt erhalten", "syncoff") : row("sync", "var(--lane)", "Sync-Datei anlegen", "Einmal in iCloud Drive speichern, danach automatisch", "synccreate") + row("file", "var(--lane)", "Vorhandene Sync-Datei wählen", "", "syncopen")) : ""}${row("file", "var(--ok)", "Export (Excel)", "Plan, Ist-Werte, Wochen, Tests, Tagebuch" + (H.exp ? " · " + esc(expLine()) : ""), "xlsx")}${EXP_OK ? (H.exp ? row("x", "var(--mute)", "Automatischen Export beenden", esc(H.exp.name) + " bleibt, wie sie ist", "expoff") : row("sync", "var(--ok)", "Automatisch exportieren", "Einmal Speicherort wählen, danach nach jeder Änderung", "exppick")) : ""}${row("cal", "var(--accent-ink)", "Kalender (.ics)", "Ab heute, inklusive Anpassungen", "ics")}${row("up", "var(--lane)", FSA ? "Sicherung speichern" : "Stand sichern", FSA ? "Kompletter Stand als Datei" : "Als Sync-Datei in iCloud Drive sichern und ersetzen", "sharejson")}${row("down", "var(--lane)", FSA ? "Sicherung laden" : "Stand laden", FSA ? "Führt mit dem Stand hier zusammen" : "Sync-Datei aus iCloud Drive öffnen", "loadjson")}</div>`;
   x += `<div class="sec"><h2>Hilfe</h2></div><div class="grp">${row("book", "var(--ink2)", "Wie die App anpasst", "Regeln und Quellen", "rules")}${row("trash", "var(--bad)", "Alle Daten löschen", "Nur auf diesem Gerät", "reset")}</div>`;
-  x += `<p class="note" style="display:flex;gap:8px;margin-top:16px">${ui("shield")}<span>Plan und Einträge liegen nur auf deinen Geräten und in der Sync-Datei, die du selbst wählst. Die App sendet nichts an Server. Empfehlungen folgen festen Trainingsregeln und ersetzen keine ärztliche Abklärung.</span></p>`;
+  x += `<div class="brandfoot nofold"><img src="logo.png" alt=""><b>Gehhilfe 4.1</b><span>Deine Stütze bis zur Ziellinie</span></div>`;
+  x += `<p class="note nofold" style="display:flex;gap:8px;margin-top:16px">${ui("shield")}<span>Plan und Einträge liegen nur auf deinen Geräten und in der Sync-Datei, die du selbst wählst. Die App sendet nichts an Server. Empfehlungen folgen festen Trainingsregeln und ersetzen keine ärztliche Abklärung.</span></p>`;
   return x;
 }
 function rulesSheet() {
@@ -1089,7 +1109,7 @@ function sickSheet(D) {
 
 /* ---------- Willkommen ---------- */
 function vWelcome() {
-  return `<main class="welcome"><img class="logo" src="gehhilfe.svg" alt=""><h1>Gehhilfe</h1><p class="lead">Deine Stütze bis Linz und ins Allgäu. Abhaken mit einem Tipp, Training in eigenen Worten notieren, und verpasst du etwas, plant die App neu.</p>
+  return `<main class="welcome"><img class="logo" src="logo.png" alt=""><h1>Gehhilfe</h1><p class="lead">Deine Stütze bis Linz und ins Allgäu. Abhaken mit einem Tipp, Training in eigenen Worten notieren, und verpasst du etwas, plant die App neu.</p>
    ${ALERT ? `<div class="banner err">${ui("info")}<div class="tx">${esc(ALERT)}</div></div>` : ""}
    <div class="steps"><div><b>1</b><span>Sync-Datei aus iCloud Drive laden. Beim allerersten Mal die Startdatei <i>Gehhilfe-Startplan.json</i>.</span></div><div><b>2</b><span>Auf dem zweiten Gerät dieselbe Sync-Datei laden.</span></div></div>
    <div class="acts">${FSA ? '<button class="btn pri wide" data-act="syncopen">Sync-Datei verbinden</button><button class="btn wide" data-act="loadjson">Sicherung oder Startdatei laden</button>' : '<button class="btn pri wide" data-act="loadjson">Sync-Datei oder Startdatei laden</button>'}</div>
@@ -1163,15 +1183,15 @@ function buildExport() {
   const c = C(), t = c.t, wb = XLSX.utils.book_new(), PV = privAdjIds(), D = d => U.wdD(d) + U.sd(d).getUTCFullYear();
   const info = [["Gehhilfe: Export", ""], ["Exportiert am", new Date().toLocaleString("de-DE")], ["Stand heute", D(t)], ["Woche", c.cw + " von " + c.NW], ["Schwellenpuls Laufen", Math.round(c.R.lthr)], ["Referenz-HM", U.hms(c.R.refHM)], ["Marathon-Prognose", U.hms(c.R.prog)], ["CSS /100 m", num(c.R.css) ? U.mss(c.R.css) : ""], [], ["Hinweis", "Datum als TT.MM.JJJJ, ID = Excel-Serienzahl-Sport-Nummer, wie in der App."]];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(info), "Info");
-  const rows = [["ID", "Woche", "Datum", "Zeit", "Prio", "Sport", "Einheit", "Soll km", "Soll min", "Status", "Grund", "Ist km", "Ist min", "Pace/Tempo", "Ø HF", "Max HF", "RPE", "Gefühl 1–5", "Hm", "Schmerz", "Erholung", "Struktur", "Notiz", "Anpassung"]];
+  const rows = [["ID", "Woche", "Datum", "Zeit", "Prio", "Sport", "Einheit", "Soll km", "Soll min", "Status", "Grund", "Ist km", "Ist min", "Pace/Tempo", "Ø HF", "Max HF", "RPE", "Gefühl 1–5", "Hm", "Schmerz 1–5", "Erholung", "Struktur", "Notiz", "Anpassung"]];
   const pace = (s, a) => a.km && a.min ? (s.sport === "Rad" ? de(a.km / (a.min / 60)) + " km/h" : s.sport === "Lauf" ? E.paceStr(a.min, a.km) + " /km" : s.sport === "Schwimmen" ? U.mss(a.min / (a.km * 10) / 1440) + " /100 m" : "") : "";
   c.Ex.filter(s => s.sport !== "Ruhe").forEach(s => { const l = log(s), a = E.actual(ST, s, t), st = s.dropped ? "entfällt" : E.statusOf(ST, s, t), done = st === "✓" || st === "½";
-    rows.push([s.id, s.w, D(s.date), s.time, s.prio, s.sport, PV.has(s.adj) ? "Angepasste Einheit" : s.name, s.km || "", s.min || "", st, l.why || "", done && a.km ? Math.round(a.km * 100) / 100 : "", done && a.min ? Math.round(a.min) : "", done ? pace(s, a) : "", l.hf ?? "", l.hfmax ?? "", l.rpe ?? "", l.feel ?? "", l.hm ?? "", l.pain == null ? "" : l.pain === 0 ? "keine" : (l.painTxt || "ja"), (l.tags || []).join(", "), E.segText(l.segs, s.sport), l.note || "", s.dropped || s.edited || s.added ? (PV.has(s.adj) ? "angepasst" : (s.note || "angepasst")) : ""]); });
-  c.free.forEach(f => rows.push(["free:" + f.id, E.weekOf(B, f.date), D(f.date), "", "frei", f.sport, f.name || "Freies Training", "", "", "✓", "", f.dist ?? "", f.dur ?? "", "", f.hf ?? "", "", f.rpe ?? "", f.feel ?? "", f.hm ?? "", f.pain == null ? "" : f.pain === 0 ? "keine" : (f.painTxt || "ja"), (f.tags || []).join(", "), E.segText(f.segs, f.sport), f.note || "", "frei"]));
+    rows.push([s.id, s.w, D(s.date), s.time, s.prio, s.sport, PV.has(s.adj) ? "Angepasste Einheit" : s.name, s.km || "", s.min || "", st, l.why || "", done && a.km ? Math.round(a.km * 100) / 100 : "", done && a.min ? Math.round(a.min) : "", done ? pace(s, a) : "", l.hf ?? "", l.hfmax ?? "", l.rpe ?? "", l.feel ?? "", l.hm ?? "", num(l.pain) ? l.pain + (l.painTxt ? " " + l.painTxt : "") : "", (l.tags || []).join(", "), E.segText(l.segs, s.sport), l.note || "", s.dropped || s.edited || s.added ? (PV.has(s.adj) ? "angepasst" : (s.note || "angepasst")) : ""]); });
+  c.free.forEach(f => rows.push(["free:" + f.id, E.weekOf(B, f.date), D(f.date), "", "frei", f.sport, f.name || "Freies Training", "", "", "✓", "", f.dist ?? "", f.dur ?? "", "", f.hf ?? "", "", f.rpe ?? "", f.feel ?? "", f.hm ?? "", num(f.pain) ? f.pain + (f.painTxt ? " " + f.painTxt : "") : "", (f.tags || []).join(", "), E.segText(f.segs, f.sport), f.note || "", "frei"]));
   const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = [14, 6, 11, 12, 5, 10, 34, 8, 8, 8, 10, 8, 8, 12, 6, 6, 5, 8, 6, 10, 18, 30, 40, 30].map(w => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, ws, "Plan");
-  const ck = [["Woche", "Ruhepuls", B.painLabel, "Gefühl 1–5", "Soll h", "Ist h", "Schlüssel", "Fitness", "Ermüdung", "Form"]];
-  c.WS.weeks.forEach(w => { const k = get("chk:" + w.w) || {}, f = c.F.find(p => p.d === w.start + 6) || {}; ck.push([w.w, k.puls ?? "", k.pain ?? "", k.feel ?? "", Math.round(w.so / 6) / 10, Math.round(w.is / 6) / 10, w.keyDone + "/" + w.keyTot, num(f.ctl) ? Math.round(f.ctl) : "", num(f.atl) ? Math.round(f.atl) : "", num(f.tsb) ? Math.round(f.tsb) : ""]); });
+  const ck = [["Woche", "Ruhepuls", "Schmerz 1–5", "Gefühl 1–5", "Soll h", "Ist h", "Schlüssel", "Fitness", "Ermüdung", "Form"]];
+  c.WS.weeks.forEach(w => { const k = get("chk:" + w.w) || {}, f = c.F.find(p => p.d === w.start + 6) || {}; ck.push([w.w, k.puls ?? "", E.painLvl(k) ?? "", k.feel ?? "", Math.round(w.so / 6) / 10, Math.round(w.is / 6) / 10, w.keyDone + "/" + w.keyTot, num(f.ctl) ? Math.round(f.ctl) : "", num(f.atl) ? Math.round(f.atl) : "", num(f.tsb) ? Math.round(f.tsb) : ""]); });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ck), "Wochen");
   const tr = [["Datum", "Test", "Zeit", "Ø HF", "VDOT", "Wirkung"]]; B.tests.forEach(T => { const r = get("test:" + T.key) || {}, km = { "10K": 10, HM: 21.0975, M: 42.195 }[T.typ]; tr.push([D(testDate(T)), T.name, num(r.time) ? U.hms(r.time) : "", r.hf ?? "", km && num(r.time) ? Math.round(E.vdot(km, r.time * 1440) * 10) / 10 : "", testEffect(T)]); });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tr), "Tests");
@@ -1196,7 +1216,8 @@ function banners() {
   return x;
 }
 function navBadge(c) { return c.P.filter(p => p.ops && p.ops.length).length + c.Ex.filter(s => s.date < c.t && s.date >= c.t - 14 && needs(s, c.t) && !s.dropped).length; }
-const TABS = [["heute", "Übersicht", "today"], ["plan", "Plan", "plan"], ["daten", "Daten", "data"], ["fort", "Leistung", "target"], ["prof", "Profil", "prof"]];
+const LOGO_BTN = `<button class="avatar" data-tab="prof" aria-label="Profil"><img src="logo.png" alt=""></button>`;
+const TABS = [["heute", "Übersicht", "today"], ["plan", "Plan", "plan"], ["fort", "Fortschritt", "prog"], ["prof", "Profil", "prof"]]; /* 4.1: Daten und Leistung zusammengelegt */
 let typing = false, dirty = false, lastY = 0, tbIdle = null;
 addEventListener("scroll", () => { document.body.classList.toggle("scrolled", window.scrollY > 52); if (WIDE()) return; const y = window.scrollY, tb = $(".tabbar"); if (!tb) return;
   if (y > lastY + 6 && y > 140) tb.classList.add("min"); else if (y < lastY - 6 || y < 80 || y + innerHeight >= document.documentElement.scrollHeight - 40) tb.classList.remove("min"); lastY = y;
@@ -1207,10 +1228,11 @@ function doRender() {
   const root = $("#root");
   if (!B) { root.innerHTML = vWelcome(); return; }
   const c = C(), n = navBadge(c), wide = WIDE();
-  const body = tab === "heute" ? vHeute(c) : tab === "plan" ? vPlan(c) : tab === "daten" ? vData(c) : tab === "fort" ? vProg(c) : vProf(c);
+  let body = tab === "heute" ? vHeute(c) : tab === "plan" ? vPlan(c) : tab === "fort" || tab === "daten" ? vProg(c) + vData(c).replace(/^<header class="lt">[\s\S]*?<\/header>/, '<div class="sec"><h2>Aktivitäten und Import</h2></div>') : vProf(c);
+  if (tab === "plan" || tab === "fort") body = body.replace(/<header class="lt">([\s\S]*?)<\/header>/, (m, a) => a.includes('class="avatar"') ? m : '<header class="lt">' + (a.includes('<div class="acts">') ? a.replace('<div class="acts">', '<div class="acts">' + LOGO_BTN) : a + '<div class="acts">' + LOGO_BTN + '</div>') + '</header>');
   const nx = B.S.events.filter(e => e.date >= c.t).sort((a, b) => a.date - b.date)[0];
   const rail = PREF.side === "rail", inspOff = PREF.insp === false;
-  const side = `<aside class="side" aria-label="Navigation"><div class="brand"><img src="gehhilfe-mark.svg" alt=""><span>Gehhilfe</span><button class="sidetog" data-act="sidetog" aria-label="${rail ? "Seitenleiste einblenden" : "Seitenleiste einklappen"}" title="Seitenleiste">${ui("sidebar")}</button></div><nav>${TABS.map(([k, l, ic]) => `<button data-tab="${k}" aria-current="${tab === k ? "page" : "false"}" title="${l}">${ui(ic)}<span class="nl">${l}</span>${k === "heute" && n ? `<span class="dot">${n}</span>` : ""}</button>`).join("")}</nav>
+  const side = `<aside class="side" aria-label="Navigation"><div class="brand"><img src="logo.png" alt=""><span>Gehhilfe</span><button class="sidetog" data-act="sidetog" aria-label="${rail ? "Seitenleiste einblenden" : "Seitenleiste einklappen"}" title="Seitenleiste">${ui("sidebar")}</button></div><nav>${TABS.map(([k, l, ic]) => `<button data-tab="${k}" aria-current="${tab === k ? "page" : "false"}" title="${l}">${ui(ic)}<span class="nl">${l}</span>${k === "heute" && n ? `<span class="dot">${n}</span>` : ""}</button>`).join("")}</nav>
     <button class="btn pri sm addbtn" data-act="free" title="Training hinzufügen">${ui("plus")}<span class="nl">Training hinzufügen</span></button><div class="foot">${nx ? `<div class="cdmini"><b class="num">${nx.date - c.t}</b><span>Tage bis ${esc(nx.name)}</span></div>` : ""}${syncPill()}</div></aside>`;
   if (!wide) { for (let k = SHEETS.length - 1; k >= 0; k--) if (SHEETS[k].side) SHEETS.splice(k, 1); }
   if (wide && inspOff && SHEETS.some(S => S.side)) PREF.insp = true;
@@ -1338,6 +1360,7 @@ document.addEventListener("click", async e => {
     case "mode": { const f = cf(); if (!f) break; f.D.mode = v; f.D.f = null; f.D.why = null; f.re(); break; }
     case "setf": { const f = cf(); if (!f) break; const F = f.D.f, raw = v; const nv = ["st", "sport"].includes(b.dataset.f) ? raw : Number(raw);
       if (b.dataset.f !== "more") (F.touch = F.touch || {})[b.dataset.f] = 1;
+      if (b.dataset.f === "pain") { F.pain = nv; buzz(4); f.re(); break; }
       if (b.dataset.f === "more") F.more = !!nv; else F[b.dataset.f] = F[b.dataset.f] === nv && !["st", "sport"].includes(b.dataset.f) ? null : nv; buzz(4); f.re(); break; }
     case "step": { const f = cf(); if (!f) break; const F = f.D.f, s = formS(f), sport = s ? s.sport : F.sport; (F.touch = F.touch || {})[b.dataset.f] = 1; stepField(F, b.dataset.f, Number(v), sport); buzz(3); syncInputs(F, sport); break; }
     case "savelog": { const f = cf(); if (!f) break; const s = findS(id), F = f.D.f; const before = Object.assign({}, C().WS.weeks[s.w - 1]);
@@ -1365,7 +1388,7 @@ document.addEventListener("click", async e => {
       const key = S.data.edit || "free:" + newId(); set(key, Object.assign({ date: F.date, sport: F.sport, dur: F.dur, dist: F.dist, hf: F.hf, rpe: F.rpe, hm: F.hm, name: F.name, note: F.note, feel: F.feel }, noteExtra(F))); closeSheet(S, true); buzz(15); toast((F.name || sp(F.sport).lab) + " gespeichert", { icon: "check" }); break; }
     case "checkin": openSheet(S => checkinForm(S.data), { label: "Check-in", data: { w: +(b.dataset.w || C().cw) } }); break;
     case "savechk": { const S = SHEETS[SHEETS.length - 1], F = S.data.f, w = S.data.w, last = E.vo2List(ST).slice(-1)[0];
-      put("chk:" + w, { puls: F.puls, pain: F.pain, feel: F.feel });
+      put("chk:" + w, { puls: F.puls, pain: num(F.pain) ? F.pain : 1, ps: 5, feel: F.feel });
       if (num(F.vo2) && (!last || last.v !== F.vo2 || F.vo2touched)) { const prevMax = Math.max(0, ...E.vo2List(ST).map(x => x.v)); put("vo2:" + today(), F.vo2); if (prevMax && F.vo2 > prevMax) { closeSheet(S, true); render(); toast("Neuer VO2max-Bestwert: " + F.vo2, { cele: true, icon: "star" }); break; } }
       closeSheet(S, true); render(); const vv = verdict(C().cw); toast("Check-in gespeichert. " + vv.txt, { icon: "heart" }); break; }
     case "test": if (!b.dataset.k) break; openSheet(S => testForm(S.data), { label: "Test", data: { k: b.dataset.k }, live: true }); break;

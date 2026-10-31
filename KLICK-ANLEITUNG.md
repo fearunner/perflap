@@ -1,4 +1,18 @@
-# Gehhilfe 4.0: Klick-Anleitung
+# Gehhilfe 4.1: Klick-Anleitung
+
+## Neu in 4.1
+
+- **Dein Logo:** Opa mit Rollator und den drei Disziplinen, als App-Icon und in der App: in jeder Kopfzeile, in der Seitenleiste, im Coach-Satz, im Profil und beim Start.
+- **Sportarten auf der Übersicht:** Je eine Karte für Laufen, Radfahren und Schwimmen. Sie zeigt, wie viel vom Soll du diese Woche und seit Planstart geschafft hast, und darunter die Leistung als Strecke von Start über heute bis zum Ziel. Laufen zeigt die Marathon-Prognose gegen 3:09. Radfahren zeigt dein Ø-Tempo der letzten 4 Wochen gegen das nötige Renntempo im Allgäu. Schwimmen zeigt deine Pace pro 100 m und ab dem ersten CSS-Test den CSS gegen 1:50. Ein Tipp auf eine Karte öffnet die Details.
+- **Schmerz 1 bis 5:** 1 heißt schmerzfrei und ist immer voreingestellt. Ändern musst du es aktiv, per Tipp oder im Text („Knie zieht, Schmerz 3/5“). Ab 3 macht die App den nächsten Tag locker, ab 4 empfiehlt sie, das ärztlich abklären zu lassen. Das gilt auch im Wochen-Check-in.
+- **Weniger Tabs:** Daten und Leistung heißen jetzt zusammen **Fortschritt**, es gibt nur noch 4 Tabs. Im Profil sind Sync und Export eine Gruppe. Die Anpassungen findest du jetzt auf der Übersicht.
+- **Aufgeräumt:** Die Kacheln „Diese Woche“ und „Fortschritt“ auf der Übersicht sind weg, die Sportarten-Karten ersetzen sie. Den Wochen-Check-in findest du unter **Körper**.
+- **Text überlappt nicht mehr:** Gruppentitel und Kurzinfo lagen in schmalen Spalten übereinander. Ein automatischer Prüflauf über alle Seiten bei 320, 390 und 1280 px findet jetzt keine Überlappung mehr.
+- **Nur Distanz eingetragen?** Dann schätzt die App die Dauer mit deinem lockeren Tempo und markiert sie mit ≈.
+
+Beim Hochladen neu: `logo.png`. Die Dateien `gehhilfe.svg`, `gehhilfe-mark.svg` und `triger.svg` kannst du auf GitHub löschen.
+
+## Gehhilfe 4.0
 
 Gehhilfe ist der neue Name von Triger. Deine Daten bleiben erhalten. Das Icon zeigt jetzt einen Opa mit Rollator.
 

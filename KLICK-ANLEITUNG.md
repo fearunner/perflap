@@ -1,4 +1,32 @@
-# Triger 3.4: Klick-Anleitung
+# Gehhilfe 4.0: Klick-Anleitung
+
+Gehhilfe ist der neue Name von Triger. Deine Daten bleiben erhalten. Das Icon zeigt jetzt einen Opa mit Rollator.
+
+## Hochladen (einmal)
+
+1. github.com öffnen, als **fearunner** anmelden, Repo **perflap** öffnen.
+2. **Add file**, dann **Upload files**.
+3. Im Finder `Claude/Privat & Test/Laufen & Triathlon/App` öffnen, alle Dateien markieren (Cmd + A) und ins Upload-Feld ziehen. Neu sind `gehhilfe.svg` und `gehhilfe-mark.svg`, geändert sind alle `.js`, `style.css`, `index.html`, `manifest.webmanifest`, `sw.js` und die drei Icons.
+4. Unten **Commit changes** klicken, 1 bis 2 Minuten warten.
+5. Die alte Datei `triger.svg` kannst du auf GitHub löschen. Sie stört aber nicht.
+6. Mac: Seite in Edge einmal mit Cmd + Shift + R neu laden. iPhone: altes Icon löschen, Seite in Safari öffnen, **Teilen**, **Zum Home-Bildschirm**. Erst dann siehst du dort Opa und Namen.
+
+## Neu in 4.0
+
+- **Nur noch die App:** Es gibt keine Trainingsplan-Excel mehr, die du laden, verbinden oder ersetzen musst. Plan, Anpassungen und Einträge leben in der App und werden über die Sync-Datei zwischen Mac und iPhone abgeglichen.
+- **Export statt Zurückschreiben:** Unter **Profil**, **Export und Sicherung** erzeugt **Export (Excel)** die Datei `Gehhilfe-Export.xlsx`. Sie enthält die Blätter Plan (mit ID je Einheit), Wochen, Tests, Tagebuch, VO2max und Anpassungen. Am Mac in Edge oder Chrome kannst du einmal **Automatisch exportieren** wählen und die Datei im Ordner „Laufen & Triathlon“ speichern. Danach aktualisiert die App sie nach jeder Änderung selbst.
+- **Sonntags-Review:** Es liest ab jetzt die neueste `Gehhilfe-Export*.xlsx` im Ordner „Laufen & Triathlon“. Ohne aktuellen Export weist dich das Review darauf hin.
+- **Wie lief es?** Beim Eintragen steht das Textfeld ganz oben. Schreib einfach, wie du trainiert hast, zum Beispiel: `0,5km WU 5x1km@5:30 + 5x0,5km@7:30, 0,5km CD, gutes Training, keine Schmerzen, danach Sauna`. Die App füllt dann Distanz (8,5 km), Dauer (etwa 52 min), Puls, RPE, Gefühl, Schmerz und Erholung selbst aus und zeigt dir darunter, was sie erkannt hat. Ein Wert, den du selbst änderst, bleibt stehen. Geschätzte Werte sind mit „≈“ markiert.
+- **Training hinzufügen (+):** Auch hier reicht der Text. Aus „Rad 62 km in 2:10 h, 650 hm, top“ wählt die App selbst die Sportart Rad und übernimmt die Werte.
+- **Design:** Farben aus deinem Referenzbild (Seal Blue, Navy, Crimson Pink), nur hell. Die Karte „Als Nächstes“ trägt die Bahnen-Optik aus dem Bild. Crimson steht nur dort, wo du etwas tun sollst.
+
+## Neues Gerät oder alles gelöscht
+
+Die App startet mit der Sync-Datei aus iCloud Drive. Ganz ohne Sync-Datei lädst du einmal die Startdatei `App-Entwicklung/Gehhilfe-Startplan.json` (enthält den Ausgangsplan). Diese Datei liegt bewusst nicht auf GitHub, weil sie persönliche Daten wie Termine und Hinweise enthält.
+
+## Frühere Versionen (Excel-Hinweise darin gelten ab 4.0 nicht mehr)
+
+### Triger 3.4
 
 Triger ist der neue Name von Performance Lab. Deine Daten bleiben erhalten. Neuen Namen und neues Icon auf dem iPhone bekommst du so: das alte Icon löschen und die Seite in Safari wieder über **Teilen**, **Zum Home-Bildschirm** hinzufügen. Erst neu laden, dann löschen, damit nichts verloren geht. Deine Daten liegen im Browser und bleiben.
 

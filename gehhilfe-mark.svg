@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="44 36 450 450" role="img" aria-label="Gehhilfe: Opa mit Rollator im Wettkampf">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E6F6FD"/><stop offset="1" stop-color="#C4E7F8"/></linearGradient>
+    <radialGradient id="glow" cx=".78" cy=".22" r=".55"><stop offset="0" stop-color="#FD6E88" stop-opacity=".28"/><stop offset="1" stop-color="#FD6E88" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <g transform="translate(258 262) scale(1.2) translate(-238 -274)">
+  <!-- Tempolinien -->
+  <g stroke="#072D59" stroke-width="12" stroke-linecap="round" opacity=".22">
+    <path d="M58 214h66M40 262h78M70 310h46"/>
+  </g>
+  <!-- Bodenschatten -->
+  <ellipse cx="288" cy="440" rx="176" ry="13" fill="#072D59" opacity=".13"/>
+  <!-- Rollator -->
+  <g fill="none" stroke="#072D59" stroke-width="15" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M352 252L410 412M352 252L322 412M334 346h62"/>
+    <path d="M336 250h28"/>
+  </g>
+  <path d="M340 352h52l-6 34h-40z" fill="#FD6E88"/>
+  <circle cx="410" cy="418" r="21" fill="#FFFFFF" stroke="#072D59" stroke-width="10"/>
+  <circle cx="322" cy="418" r="21" fill="#FFFFFF" stroke="#072D59" stroke-width="10"/>
+  <circle cx="410" cy="418" r="5" fill="#072D59"/><circle cx="322" cy="418" r="5" fill="#072D59"/>
+  <!-- hinteres Bein -->
+  <path d="M220 304l-24 58-30 46" fill="none" stroke="#F3C3A1" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M220 300l-16 38" fill="none" stroke="#0B3A70" stroke-width="36" stroke-linecap="round"/>
+  <path d="M140 404c4-10 22-12 34-6l10 6c4 3 2 12-4 12h-36c-5 0-6-6-4-12z" fill="#FD6E88"/>
+  <path d="M138 414h48" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <!-- Oberkörper -->
+  <path d="M244 204L224 300" fill="none" stroke="#072D59" stroke-width="62" stroke-linecap="round"/>
+  <!-- Startnummer -->
+  <g transform="rotate(12 236 250)">
+    <rect x="212" y="230" width="50" height="38" rx="5" fill="#FFFFFF"/>
+    <text x="237" y="257" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Rounded','Helvetica Neue',Arial,sans-serif" font-weight="800" font-size="24" fill="#FD6E88">80</text>
+  </g>
+  <!-- vorderes Bein -->
+  <path d="M232 304l40 52 8 52" fill="none" stroke="#F3C3A1" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M230 300l28 34" fill="none" stroke="#0B3A70" stroke-width="36" stroke-linecap="round"/>
+  <path d="M266 404c4-10 22-12 34-6l12 6c4 3 2 12-4 12h-38c-5 0-6-6-4-12z" fill="#FD6E88"/>
+  <path d="M264 414h50" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  <!-- Arm -->
+  <path d="M252 218l42 30 42 2" fill="none" stroke="#0B3A70" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="342" cy="250" r="13" fill="#F3C3A1"/>
+  <!-- Kopf -->
+  <circle cx="226" cy="150" r="46" fill="#F3C3A1"/>
+  <path d="M186 160c-10-4-12-22-2-28M266 160c10-4 12-22 2-28" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round"/>
+  <path d="M181 128c10-8 80-8 90 0l-3 14c-26-6-58-6-84 0z" fill="#FD6E88"/>
+  <circle cx="211" cy="156" r="11" fill="none" stroke="#072D59" stroke-width="5"/>
+  <circle cx="243" cy="156" r="11" fill="none" stroke="#072D59" stroke-width="5"/>
+  <path d="M222 156h10" stroke="#072D59" stroke-width="5" stroke-linecap="round"/>
+  <path d="M206 178c8 8 34 8 42 0c-4 12-38 12-42 0z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M226 186c4 3 9 3 13 0" fill="none" stroke="#072D59" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>

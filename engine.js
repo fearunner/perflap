@@ -1,6 +1,6 @@
 /* Performance Lab: Plan-Logik (Import, effektiver Plan, Zonen, Anpassungsvorschläge).
    Reine Funktionen ohne DOM, damit sie testbar sind. Keine personenbezogenen Daten im Code:
-   Plan, Termine und Texte kommen ausschließlich aus der importierten Excel. */
+   Plan, Termine und Texte kommen aus der Sync- bzw. Startdatei (ab 4.0 keine Excel mehr); parseWorkbook bleibt nur für das Entwicklerwerkzeug make_startplan. */
 (function (G) {
 "use strict";
 const HMK = 21.0975, MK = 42.195, RIEGEL = Math.pow(2, 1.06);
@@ -1125,146 +1125,12 @@ function aiValidate(B, st, t, resp) {
 }
 
 
-/* ---------- v3.0 Zurückschreiben ins Original-Excel (zellgenau, Formate bleiben) ----------
-   ZIP lesen/schreiben mit DecompressionStream/CompressionStream ("deflate-raw"), ohne Zusatzbibliothek. */
-const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
-function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
-async function streamBytes(u8, Kind, fmt) { const s = new Blob([u8]).stream().pipeThrough(new Kind(fmt)); return new Uint8Array(await new Response(s).arrayBuffer()); }
-function unzipIndex(u8) {
-  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); let e = u8.length - 22;
-  while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--; if (e < 0) throw new Error("Keine gültige xlsx-Datei (ZIP-Verzeichnis fehlt).");
-  const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true); const out = [];
-  for (let i = 0; i < n; i++) {
-    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("ZIP-Verzeichnis beschädigt.");
-    const method = dv.getUint16(p + 10, true), time = dv.getUint16(p + 12, true), date = dv.getUint16(p + 14, true), crc = dv.getUint32(p + 16, true), csize = dv.getUint32(p + 20, true), usize = dv.getUint32(p + 24, true);
-    const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
-    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl)), lnl = dv.getUint16(off + 26, true), lxl = dv.getUint16(off + 28, true), ds = off + 30 + lnl + lxl;
-    out.push({ name, method, time, date, crc, csize, usize, raw: u8.subarray(ds, ds + csize) }); p += 46 + nl + xl + cl;
-  }
-  return out;
-}
-async function zipText(en) { const b = en.method === 0 ? en.raw : await streamBytes(en.raw, DecompressionStream, "deflate-raw"); return new TextDecoder().decode(b); }
-async function zipBuild(entries) {
-  const parts = [], cd = []; let off = 0; const te = new TextEncoder();
-  for (const en of entries) {
-    let raw = en.raw, crc = en.crc, usize = en.usize, method = en.method;
-    if (en.text != null) { const u = te.encode(en.text); crc = crc32(u); usize = u.length; raw = await streamBytes(u, CompressionStream, "deflate-raw"); method = 8; }
-    const nm = te.encode(en.name), lh = new Uint8Array(30 + nm.length), lv = new DataView(lh.buffer);
-    lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0, true); lv.setUint16(8, method, true); lv.setUint16(10, en.time || 0, true); lv.setUint16(12, en.date || 0x21, true);
-    lv.setUint32(14, crc, true); lv.setUint32(18, raw.length, true); lv.setUint32(22, usize, true); lv.setUint16(26, nm.length, true); lv.setUint16(28, 0, true); lh.set(nm, 30);
-    const ch = new Uint8Array(46 + nm.length), cv = new DataView(ch.buffer);
-    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(8, 0, true); cv.setUint16(10, method, true); cv.setUint16(12, en.time || 0, true); cv.setUint16(14, en.date || 0x21, true);
-    cv.setUint32(16, crc, true); cv.setUint32(20, raw.length, true); cv.setUint32(24, usize, true); cv.setUint16(28, nm.length, true); cv.setUint32(42, off, true); ch.set(nm, 46);
-    parts.push(lh, raw); cd.push(ch); off += lh.length + raw.length;
-  }
-  const cdl = cd.reduce((a, c) => a + c.length, 0), end = new Uint8Array(22), ev = new DataView(end.buffer);
-  ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, entries.length, true); ev.setUint16(10, entries.length, true); ev.setUint32(12, cdl, true); ev.setUint32(16, off, true);
-  const all = new Uint8Array(off + cdl + 22); let p = 0; for (const x of parts.concat(cd, [end])) { all.set(x, p); p += x.length; } return all;
-}
-const xmlEsc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
-const colNum = c => c.split("").reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
-/* Setzt Zellen eines Blatts. val: Zahl, String oder null (leeren). Stil (s=) bleibt, Formeln werden nur dort ersetzt, wo die App bewusst schreibt. */
-function patchSheet(xml, cells) {
-  const byRow = {}; Object.keys(cells).forEach(ref => { const m = ref.match(/^([A-Z]+)(\d+)$/); (byRow[m[2]] = byRow[m[2]] || []).push([m[1], cells[ref]]); });
-  const mk = (ref, sAttr, v) => v == null || v === "" ? `<c r="${ref}"${sAttr}/>` : typeof v === "number" ? `<c r="${ref}"${sAttr}><v>${v}</v></c>` : `<c r="${ref}"${sAttr} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
-  return xml.replace(/<row r="(\d+)"([^>]*?)(\/>|>([\s\S]*?)<\/row>)/g, (all, rn, attrs, tail, inner) => {
-    const todo = byRow[rn]; if (!todo) return all; inner = inner || "";
-    todo.forEach(([col, v]) => {
-      const ref = col + rn, re = new RegExp('<c r="' + ref + '"([^>]*?)(?:/>|>[\\s\\S]*?</c>)');
-      const m = inner.match(re);
-      if (v && typeof v === "object") { if (m && /<f[ >]/.test(m[0])) return; v = v.soft; }
-      if (m) { const sAttr = (m[1].match(/ s="\d+"/) || [""])[0]; inner = inner.replace(re, mk(ref, sAttr, v)); return; }
-      const cells2 = [...inner.matchAll(/<c r="([A-Z]+)\d+"/g)], after = cells2.find(c => colNum(c[1]) > colNum(col)), nc = mk(ref, "", v);
-      inner = after ? inner.slice(0, after.index) + nc + inner.slice(after.index) : inner + nc;
-    });
-    return `<row r="${rn}"${attrs}>${inner}</row>`;
-  });
-}
-function wbPaths(wbXml, relXml) {
-  const rel = {}; [...relXml.matchAll(/<Relationship [^>]*?Id="([^"]+)"[^>]*?Target="([^"]+)"/g)].forEach(m => rel[m[1]] = m[2]);
-  [...relXml.matchAll(/<Relationship [^>]*?Target="([^"]+)"[^>]*?Id="([^"]+)"/g)].forEach(m => rel[m[2]] = rel[m[2]] || m[1]);
-  const out = {}; [...wbXml.matchAll(/<sheet [^>]*?name="([^"]+)"[^>]*?r:id="([^"]+)"/g)].forEach(m => { const t = rel[m[2]]; if (t) out[m[1].replace(/&amp;/g, "&")] = t.startsWith("/") ? t.slice(1) : "xl/" + t.replace(/^\.\//, ""); });
-  return out;
-}
-/* Baut die Zellwerte für Plan, Wochen und Tests. Krankheitsgründe, Reiseorte und Gewicht werden nicht geschrieben. */
-/* App-Vermerk in der ersten Zeile, darunter bleiben Wecker und eigene Hinweise erhalten. */
-const vTail = o => (o.wake ? "\nWecker " + o.wake : "") + (o.hint ? "\n" + o.hint : "");
-function writeBackCells(B0, B, st, t) {
-  const E = effective(B, st), byId = new Map(E.map(s => [s.id, s])), plan = {}, weeks = {}, tests = {}, stat = { status: 0, ist: 0, changed: 0, moved: 0, chk: 0, tests: 0, free: freeList(st).length };
-  const priv = new Set(activeAdj(st).filter(a => /^sick/.test(a.key || "")).map(a => a.id));
-  /* Verschobene Einheiten haben keine eigene Excel-Zeile (ID mit ~). Ihr Ergebnis gehört in die Zeile der Ursprungseinheit. */
-  const moved = id => E.filter(y => y.added && !y.dropped && String(y.id).split("~")[0] === id).sort((a, b) => b.date - a.date)[0];
-  const logOf = s => { const x = s.date <= t ? statusOf(st, s, t) : (val(st, "log:" + s.id) || {}).st || "", l = val(st, "log:" + s.id) || {}; return { x, l, stv: x === "krank" ? "✗" : ["✓", "½", "✗"].includes(x) ? x : null }; };
-  B0.plan.forEach(o => {
-    if (!o.row) return; const s = byId.get(o.id); if (!s) return; const r = o.row, mv = moved(o.id);
-    const own = logOf(s), via = mv ? logOf(mv) : null, use = via && via.stv ? { s: mv, ...via } : { s, ...own };
-    const { x, l, stv } = use;
-    plan["K" + r] = stv; if (stv) stat.status++;
-    if (x === "krank" && !s.dropped && !s.edited && !mv) plan["V" + r] = "[App] krank" + vTail(o);
-    const dk = distKm(use.s, l), ik = dk != null ? r1(dk) : num(l.ikm) ? l.ikm : null, im = num(l.dur) ? Math.round(l.dur) : num(l.imin) ? l.imin : null;
-    plan["L" + r] = stv && stv !== "✗" ? ik : null; plan["M" + r] = stv && stv !== "✗" ? im : null; if (ik != null || im != null) stat.ist++;
-    const base = o.name.replace(/^\[(entfällt|verschoben|App)\]\s*/, "");
-    if (mv) {
-      const same = weekOf(B0, mv.date) === o.w;
-      plan["F" + r] = "[verschoben] " + base;
-      plan["I" + r] = same ? mv.km || 0 : 0; plan["J" + r] = same ? mv.min || 0 : 0;
-      plan["V" + r] = "[App] Verschoben auf " + wdD(mv.date) + (mv.time ? " " + mv.time : "") + "." + (via.stv ? (via.stv === "✗" ? " Dort verpasst." : " Dort erledigt.") : own.stv === "✗" ? " Hier verpasst, dort offen." : "") + (same ? "" : " Andere Woche: Umfang zählt in der Excel weiter hier.") + vTail(o);
-      stat.moved++;
-    } else if (s.dropped) {
-      plan["F" + r] = "[entfällt] " + base;
-      plan["I" + r] = 0; plan["J" + r] = 0;
-      plan["V" + r] = "[App] " + (priv.has(s.adj) ? "Angepasst." : (s.note || "Entfällt.")) + vTail(o);
-      stat.changed++;
-    } else if (s.edited) {
-      plan["F" + r] = priv.has(s.adj) ? "[App] Angepasste Einheit" : "[App] " + s.name.replace(/^★\s*/, "");
-      if (s.km !== o.km) plan["I" + r] = s.km || 0; if (s.min !== o.min) plan["J" + r] = s.min || 0; if (s.prio && s.prio !== o.prio) plan["D" + r] = s.prio;
-      plan["V" + r] = "[App] " + (priv.has(s.adj) ? "Angepasst." : "Ursprünglich: " + base + ". " + (s.note || "")) + vTail(o);
-      stat.changed++;
-    } else if (o.vApp && !o.xl && x !== "krank") plan["V" + r] = vTail(o).trim() || null; /* alter App-Vermerk ohne Grundlage (z. B. wieder gesund) */
-  });
-  Object.keys(B0.weeks || {}).forEach(w => { const r = B0.weeks[w].row, c = val(st, "chk:" + w); if (!r || !c) return; weeks["D" + r] = num(c.puls) ? c.puls : null; weeks["E" + r] = num(c.pain) ? c.pain : null; weeks["F" + r] = num(c.feel) ? c.feel : null; stat.chk++; });
-  B0.tests.forEach(T => { const r = T.row, v = val(st, "test:" + T.key); if (!r || !v) return; if (num(v.time)) tests["F" + r] = v.time; if (num(v.hf)) tests["G" + r] = v.hf; if (num(v.time) || num(v.hf)) stat.tests++; });
-  return { plan, weeks, tests, stat };
-}
-async function writeBack(XLSX, src, B, st, t) {
-  const B0 = parseWorkbook(XLSX, src); if (!B0.plan.length || !B0.plan[0].row) throw new Error("Plan-Zeilen nicht gefunden.");
-  const ids = new Set(B.plan.map(s => s.id)), miss = B0.plan.filter(s => !ids.has(s.id)).length;
-  if (miss > B0.plan.length * .1) throw new Error("Die gespeicherte Excel passt nicht zum Plan in der App (" + miss + " Einheiten unbekannt). Bitte den aktuellen Trainingsplan wählen.");
-  const W = writeBackCells(B0, B, st, t), Z = unzipIndex(src), get = n => Z.find(e => e.name === n);
-  const paths = wbPaths(await zipText(get("xl/workbook.xml")), await zipText(get("xl/_rels/workbook.xml.rels")));
-  const patch = { [paths.Plan]: W.plan, [paths.Wochen]: W.weeks, [paths.Tests]: W.tests };
-  const diary = diaryRows(st), DS = paths["App-Tagebuch"] || "xl/worksheets/sheetAppTagebuch.xml", isNew = !paths["App-Tagebuch"];
-  W.stat.diary = diary.length;
-  const out = [];
-  for (const en of Z) {
-    if (en.name === "xl/calcChain.xml") continue;
-    if (patch[en.name] && Object.keys(patch[en.name]).length) { out.push(Object.assign({}, en, { text: patchSheet(await zipText(en), patch[en.name]) })); continue; }
-    if (en.name === DS) continue;
-    if (en.name === "xl/workbook.xml") { let x = await zipText(en); x = /<calcPr[^>]*fullCalcOnLoad/.test(x) ? x : x.replace(/<calcPr([^>]*?)\/>/, '<calcPr$1 fullCalcOnLoad="1"/>');
-      if (isNew) { const ids = [...x.matchAll(/sheetId="(\d+)"/g)].map(m => +m[1]); x = x.replace("</sheets>", `<sheet name="App-Tagebuch" sheetId="${Math.max(0, ...ids) + 1}" r:id="rIdAppTb"/></sheets>`); } out.push(Object.assign({}, en, { text: x })); continue; }
-    if (en.name === "[Content_Types].xml") { let x = (await zipText(en)).replace(/<Override [^>]*calcChain[^>]*\/>/, ""); if (isNew) x = x.replace("</Types>", '<Override PartName="/' + DS + '" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'); out.push(Object.assign({}, en, { text: x })); continue; }
-    if (en.name === "xl/_rels/workbook.xml.rels") { let x = (await zipText(en)).replace(/<Relationship [^>]*calcChain[^>]*\/>/, ""); if (isNew) x = x.replace("</Relationships>", '<Relationship Id="rIdAppTb" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="' + DS.replace(/^xl\//, "") + '"/></Relationships>'); out.push(Object.assign({}, en, { text: x })); continue; }
-    out.push(en);
-  }
-  out.push({ name: DS, text: diarySheetXml(diary), time: 0, date: 0x21 });
-  return { bytes: await zipBuild(out), stat: W.stat };
-}
 /* Tagebuch-Zeilen: Datum, Morgen-Check, Gewicht, Mahlzeiten. Keine Krankheitsdetails. */
 function diaryRows(st) {
   const days = new Set(); Object.keys(st).forEach(k => { const m = k.match(/^(mc|wt|fd):(\d+)$/); if (m && st[k].v != null) days.add(+m[2]); });
   return [...days].sort((a, b) => a - b).map(d => { const mc = val(st, "mc:" + d) || {}, fd = val(st, "fd:" + d) || {}, w = val(st, "wt:" + d);
     return [d, mc.sleep ?? null, mc.sq ?? null, mc.feel ?? null, mc.puls ?? null, mc.sore ?? null, num(w) ? w : null, fd.f || "", fd.m || "", fd.a || "", fd.s || "", fd.n || ""]; }).filter(r => r.slice(1).some(v => v != null && v !== ""));
 }
-function diarySheetXml(rows) {
-  const col = i => String.fromCharCode(65 + i), H = ["Datum", "Schlaf h", "Schlafqualität 1–5", "Gefühl 1–5", "Ruhepuls", "Muskelkater 0–3", "Gewicht kg", "Frühstück", "Mittagessen", "Abendessen", "Snacks", "Notiz"];
-  const cell = (r, i, v) => v == null || v === "" ? "" : typeof v === "number" ? `<c r="${col(i)}${r}"${i === 0 ? ' s="0"' : ""}><v>${v}</v></c>` : `<c r="${col(i)}${r}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
-  const rowsX = [`<row r="1">${cell(1, 0, "Performance Lab: Tagebuch (von der App geschrieben, Datum als Excel-Serienzahl, bitte nicht von Hand ändern)")}</row>`, `<row r="2">${H.map((h, i) => cell(2, i, h)).join("")}</row>`]
-    .concat(rows.map((r, j) => `<row r="${j + 3}">${r.map((v, i) => cell(j + 3, i, v)).join("")}</row>`));
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><cols><col min="1" max="1" width="12" customWidth="1"/><col min="2" max="7" width="11" customWidth="1"/><col min="8" max="12" width="40" customWidth="1"/></cols><sheetData>${rowsX.join("")}</sheetData></worksheet>`;
-}
-/* ---------- v3.2 Morgen-Check und Gewicht ----------
-   Morgen-Check mc:<serial> = { sleep: Stunden, sq: 1–5 Schlafqualität, feel: 1–5, puls: bpm, sore: 0–3 Muskelkater }.
-   Bewertung als Bereitschaft. Schwellen sind eigene Regeln, angelehnt an Praxis (Ruhepuls +7 über Basis, < 6 h Schlaf), keine validierten Grenzwerte. */
 function restBase(B, st, t) { const pts = []; for (let d = t - 28; d < t; d++) { const m = val(st, "mc:" + d); if (m && num(m.puls)) pts.push(m.puls); } if (pts.length >= 5) { pts.sort((a, b) => a - b); return pts[Math.floor(pts.length / 2)]; } return num(B.S.rest) ? B.S.rest : 60; }
 function morningReady(B, st, t) {
   const m = val(st, "mc:" + t); if (!m) return null; const base = restBase(B, st, t), why = []; let score = 0;
@@ -1319,6 +1185,125 @@ function ics(B, st, t) {
 function autoOk(p, E, st) { if (!p || !p.ops || !p.ops.length || p.needsOk) return false; if (/^(man|mand|ai):/.test(p.key)) return false;
   if (st && p.ops.some(o => val(st, "nou:" + (o.type === "add" ? String(o.s.id).split("~")[0] : o.id)))) return false;
   return !p.ops.some(o => isTestOp(o, E) || (o.type !== "add" && (E.find(x => x.id === o.id) || {}).test === "race")); }
-G.Engine = { disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, writeBack, writeBackCells, distKm, patchSheet, unzipIndex, zipText, zipBuild, crc32, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
+/* ---------- 4.0 Freitext: "Wie lief es?" automatisch auswerten ----------
+   Reine Funktion, keine Netzwerkanfrage. Erkennt Struktur (WU, Intervalle, CD), Distanz, Dauer, Puls, RPE, Höhenmeter,
+   Gefühl, Schmerzen (mit Verneinung), Erholung und Abbruch. Unsicheres wird als geschätzt markiert, nichts wird erfunden. */
+const NOTE_FEEL = [[5, /(?<![a-zäöüß])(super|top|perfekt|hervorragend|sehr gut\w*|mega|klasse|bombe|richtig gut\w*|traumhaft)(?![a-zäöüß])/g],
+  [4, /(?<![a-zäöüß])(gut(e|es|er|en)?|stark(e|es)?|flüssig|angenehm|frisch|souverän)(?![a-zäöüß])/g],
+  [3, /(?<![a-zäöüß])(ok|okay|solide|passabel|ging so|mittel|normal|durchwachsen)(?![a-zäöüß])/g],
+  [2, /(?<![a-zäöüß])(müde|zäh(e|es)?|schwer(e|es)? beine|schwere|mühsam|anstrengend|träge|schlapp)(?![a-zäöüß])/g],
+  [1, /(?<![a-zäöüß])(platt|kaputt|fertig|elend|katastroph\w*|schlecht(e|es)?|miserabel|grottig|furchtbar)(?![a-zäöüß])/g]];
+const NOTE_FEEL_LAB = ["", "platt", "müde", "okay", "gut", "top"];
+const NOTE_TAGS = [["Sauna", /sauna/], ["Regeneration", /regenerat|erholung/], ["Massage", /massage/], ["Faszienrolle", /faszien|blackroll|foam ?roll/],
+  ["Dehnen", /dehn|stretch/], ["Eisbad", /eisbad|kältebad|eistonne|cold plunge/], ["Kompression", /kompression/], ["Yoga", /yoga/], ["Mobility", /mobility|mobilisation/]];
+const NOTE_REGION = /(knie|hallux|großzeh|zeh|wade|waden|achilles\w*|schienbein|hüfte|rücken|fuß|füße|ferse|oberschenkel|leiste|schulter|sprunggelenk|knöchel|it[- ]?band|po|gesäß|nacken)/;
+function parseNote(text, o) {
+  o = o || {}; const sport = o.sport || "Lauf", swim = sport === "Schwimmen";
+  const r = { segs: [], tags: [], chips: [] }; let t = String(text || "").toLowerCase();
+  if (!t.trim()) return r;
+  t = t.replace(/(\d{1,2})\.(\d{3})(?=\s*(m|meter)\b)/g, "$1$2").replace(/(\d),(\d)/g, "$1.$2").replace(/×/g, "x").replace(/[–—]/g, "-").replace(/\s+/g, " ");
+  const mask = (m) => { t = t.slice(0, m.index) + " ".repeat(m[0].length) + t.slice(m.index + m[0].length); };
+  const all = re => { const out = []; let m; re.lastIndex = 0; while ((m = re.exec(t))) { out.push(m); if (!re.global) break; } return out; };
+  const pc = s => { if (!s) return null; const m = String(s).match(/^(\d{1,2})[:.](\d{2})$/); return m && +m[2] < 60 ? +m[1] + (+m[2]) / 60 : null; };
+  const toKm = (v, u, n) => { v = +v; if (u === "km" || u === "k") return v; if (u === "m" || u === "meter") return v / 1000; return swim || v >= 50 ? v / 1000 : v; };
+  /* Abbruch */
+  if (/abgebrochen|abbruch|nur (die )?hälfte|nicht fertig|vorzeitig beendet/.test(t)) r.st = "½";
+  /* Schmerzfrei zuerst (Verneinung), dann Schmerz */
+  all(/(kein(e|en)?|ohne|null|nix)\s+(schmerz\w*|beschwerde\w*|probleme|wehwehchen)|schmerzfrei|beschwerdefrei|tut nichts weh/g).forEach(m => { r.pain = 0; mask(m); });
+  const pm = t.match(/(schmerz\w*|zieh\w*|ziept?|zwickt?|stech\w*|tut weh|weh getan|drückt|beschwerde\w*|entzünd\w*)/);
+  const pr = !pm && t.match(new RegExp(NOTE_REGION.source + "[^.,;]{0,25}?(\\d{1,2})\\s*\\/\\s*10|" + NOTE_REGION.source + "\\s+(meldet sich|macht probleme|zickt|muckt)"));
+  if (pr && r.pain !== 0) { r.pain = pr[2] ? Math.min(10, +pr[2]) : 1; r.painTxt = (pr[1] || pr[3]).replace(/^./, c => c.toUpperCase()); }
+  if (pm) { const w0 = Math.max(0, pm.index - 40), win = t.slice(w0, pm.index + 50), lv = win.match(/(\d{1,2})\s*\/\s*10/);
+    const rgs = [...win.matchAll(new RegExp(NOTE_REGION.source, "g"))].sort((a, b) => Math.abs(w0 + a.index - pm.index) - Math.abs(w0 + b.index - pm.index)), rg = rgs[0];
+    r.pain = lv ? Math.min(10, +lv[1]) : 1; r.painTxt = rg ? rg[1].replace(/^./, c => c.toUpperCase()) : "ja"; }
+  /* Intervalle: 5x1km@5:30, 6x400m in 1:45, 4x5min@4:20, 10x100 */
+  all(/(?<![\d.:])(\d{1,2})\s*x\s*(\d+(?:\.\d+)?)\s*(km|k|meter|m|min|minuten|'|sek|s)?(?![a-z\d])/g).forEach(m0 => {
+    /* Pace/Zeit nur übernehmen, wenn sie plausibel ist (sonst bleibt z. B. "in 52:30" die Gesamtdauer) */
+    const tail = /^\s*(?:(@|à|a|in|mit|bei|zu je|je)\s*(\d{1,2}[:.]\d{2})\s*(?:min)?\s*(?:\/\s*(?:km|100\s*m))?)/.exec(t.slice(m0.index + m0[0].length));
+    const pv = tail ? pc(tail[2]) : null, inSep = tail && /^(in|zu je|je)$/.test(tail[1]);
+    const okP = pv != null && (inSep ? pv > 0 && pv < 30 : swim ? pv >= .8 && pv <= 5 : sport === "Rad" ? pv >= 1 && pv <= 6 : pv >= 2.5 && pv <= 15);
+    const m = Object.assign([m0[0] + (okP ? tail[0] : "")], { index: m0.index }); m[1] = m0[1]; m[2] = m0[2]; m[3] = m0[3]; m[4] = okP ? tail[2] : undefined;
+    const n = +m[1], u = m[3] || "", p = pc(m[4]); if (n < 1 || n > 60) return;
+    let km = null, min = null;
+    if (/^(min|minuten|')$/.test(u)) { min = n * +m[2]; if (p) km = swim ? min / p / 10 : min / p; }
+    else if (/^(sek|s)$/.test(u)) { min = n * +m[2] / 60; if (p) km = min / p; }
+    let inT = null;
+    if (!/^(min|minuten|'|sek|s)$/.test(u)) { km = n * toKm(m[2], u); const isIn = m[4] && /(in|zu je|je)\s*$/.test(m[0].slice(0, m[0].lastIndexOf(m[4]))) && km / n < 1;
+      if (p && isIn) { inT = p; min = n * p; } else if (p) min = swim ? km * 10 * p : km * p; }
+    r.segs.push({ kind: "iv", n, each: km != null ? km / n : null, eachMin: min != null && /^(min|minuten|'|sek|s)$/.test(u) ? min / n : null, inT, km, min, pace: inT ? null : p }); mask(m);
+  });
+  /* Einlaufen / Auslaufen, beide Reihenfolgen */
+  const WU = "wu|warm[- ]?up|einlaufen|eingelaufen|ein", CD = "cd|cool[- ]?down|auslaufen|ausgelaufen|aus";
+  const segRe = [new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(km|k|m|min|')\\s*(${WU}|${CD})(?![a-z])\\s*(?:@\\s*(\\d{1,2}[:.]\\d{2}))?`, "g"), new RegExp(`(?<![a-z])(${WU}|${CD})\\s*:?\\s*(\\d+(?:\\.\\d+)?)\\s*(km|k|m|min|')(?![a-z])\\s*(?:@\\s*(\\d{1,2}[:.]\\d{2}))?`, "g")];
+  segRe.forEach((re, j) => all(re).forEach(m => { const v = j ? m[2] : m[1], u = j ? m[3] : m[2], w = j ? m[1] : m[3], p = pc(m[4]);
+    const kind = new RegExp(`^(${WU})$`).test(w) ? "wu" : "cd"; let km = null, min = null;
+    if (u === "min" || u === "'") { min = +v; if (p) km = min / p; } else { km = toKm(v, u === "k" ? "km" : u); if (p) min = km * p; }
+    r.segs.push({ kind, km, min, pace: p, pos: m.index }); mask(m); }));
+  /* Ø-Pace allgemein */
+  const ap = t.match(/(?:@|pace|schnitt|ø-?pace|im schnitt)\s*(\d{1,2}[:.]\d{2})\s*(?:min)?\s*(?:\/\s*(km|100\s*m))?|(\d{1,2}:\d{2})\s*(?:min)?\s*\/\s*(km|100\s*m)/);
+  if (ap) { r.pace = pc(ap[1] || ap[3]); mask(ap); }
+  /* Puls */
+  const hx = t.match(/(?:max(?:imal)?[- ]?(?:puls|hf)|hf[- ]?max|maxpuls|max)\s*(?:von|bei|:)?\s*(\d{2,3})/); if (hx && +hx[1] >= 100 && +hx[1] <= 230) { r.hfmax = +hx[1]; mask(hx); }
+  const hf = t.match(/(?:ø\s*|avg\s*|schnitt\s*|durchschnitt\w*\s*)?(?:hf|puls|herzfrequenz)\s*(?:von|bei|ø|:|im schnitt|durchschnitt\w*)?\s*(\d{2,3})|(\d{2,3})\s*(?:bpm|schläge)/);
+  if (hf) { const v = +(hf[1] || hf[2]); if (v >= 60 && v <= 220) { r.hf = v; mask(hf); } }
+  const rp = t.match(/(?:rpe|anstrengung|belastung|borg)\s*:?\s*(\d{1,2})(?:\s*\/\s*10)?/); if (rp && +rp[1] >= 1 && +rp[1] <= 10) { r.rpe = +rp[1]; mask(rp); }
+  const hm = t.match(/(\d{2,4})\s*(?:hm|höhenmeter)(?![a-z])/); if (hm) { r.hm = +hm[1]; mask(hm); }
+  /* Dauer */
+  let dur = null; const d1 = t.match(/(\d{1,2}):(\d{2}):(\d{2})/) || null;
+  if (d1) { dur = +d1[1] * 60 + +d1[2] + +d1[3] / 60; mask(d1); }
+  else { const d2 = t.match(/(\d{1,2})\s*(?:h|std|stunden?)\s*(\d{1,2})?\s*(?:min|m)?(?![a-z])|(\d{1,2}):(\d{2})\s*(?:h|std)(?![a-z])/);
+    if (d2) { dur = d2[1] != null ? +d2[1] * 60 + (+d2[2] || 0) : +d2[3] * 60 + +d2[4]; mask(d2); }
+    else { const d3 = t.match(/(\d{1,3}(?:\.\d+)?)\s*(?:min|minuten|')(?![a-z])/); if (d3) { dur = +d3[1]; mask(d3); }
+      else { const d4 = t.match(/(?:in|zeit|dauer)\s*:?\s*(\d{1,3}):(\d{2})(?!\s*\/)/) || t.match(/(?<![\d:])(\d{2,3}):(\d{2})(?![\d:]|\s*\/)/);
+        if (d4 && (+d4[1] >= 15 || /^(in|zeit|dauer)/.test(d4[0]))) { dur = +d4[1] + +d4[2] / 60; mask(d4); } } } }
+  /* Freie Distanzen: größte nehmen (z. B. "12 km, davon 3 km zügig") */
+  const pl = all(/(\d+(?:\.\d+)?)\s*(km|k|meter|m)(?![a-z])(?!\s*\/)/g).map(m => toKm(m[1], m[2] === "k" ? "km" : m[2]));
+  /* Sport aus dem Text (nur Hinweis für freie Einheiten) */
+  const SPW = [["Schwimmen", /schwimm|kraul|bahnen|becken|freiwasser/], ["Rad", /(?<![a-z])(rad|bike|radfahr|rennrad|gravel|rolle|zwift|indoor ?cycling)/], ["Kraft", /kraft|gym|hantel|studio|kniebeug/], ["Mobility", /yoga|mobility|dehn/], ["Lauf", /lauf|gelaufen|joggen|jogg|run(?![a-z])|intervall|tempodauer/]];
+  const sw = SPW.find(([, re]) => re.test(String(text || "").toLowerCase())); if (sw) r.sport = sw[0];
+  /* Summen: Struktur geht vor freier Distanz */
+  const easy = num(o.easyPace) && o.easyPace > 0 ? o.easyPace : swim ? 25 : sport === "Rad" ? 2.4 : 6;
+  const ivs = r.segs.filter(s => s.kind === "iv" && s.pace); if (ivs.length > 1) { const f = Math.min(...ivs.map(s => s.pace)); ivs.forEach(s => { if (s.pace - f >= 1.25) s.kind = "trab"; }); }
+  r.segs.sort((a, b) => (a.kind === "wu" ? -1 : a.kind === "cd" ? 1 : 0) - (b.kind === "wu" ? -1 : b.kind === "cd" ? 1 : 0));
+  let est = false;
+  if (r.segs.length) {
+    const kmKnown = r.segs.every(s => s.km != null); let km = 0, min = 0;
+    r.segs.forEach(s => { if (s.km != null) km += s.km; if (s.min != null) min += s.min; else if (s.km != null) { min += s.km * (r.pace || easy); est = true; } else est = true; });
+    if (kmKnown || km > 0) r.dist = Math.round(km * 1000) / 1000;
+    const big = pl.length ? Math.max(...pl) : 0; /* "1.500 m, darin 4x100": freie Distanz ist die Gesamtstrecke */
+    if (big > (r.dist || 0)) { const rest = big - (r.dist || 0); r.dist = big; if (min > 0 || km > 0) { min += rest * (r.pace || easy); est = true; } }
+    r.dur = dur != null ? dur : min > 0 ? Math.round(min * 10) / 10 : undefined; if (dur != null) est = false;
+  } else {
+    if (pl.length) r.dist = Math.max(...pl);
+    if (dur != null) r.dur = dur;
+    if (r.dist != null && r.dur == null && r.pace) r.dur = swim ? r.dist * 10 * r.pace : r.dist * r.pace;
+    if (r.dur != null && r.dist == null && r.pace) r.dist = Math.round((swim ? r.dur / r.pace / 10 : r.dur / r.pace) * 100) / 100;
+  }
+  if (est && r.dur != null) r.durEst = true;
+  /* Gefühl: Mittel aus allen Signalen, Verneinung dreht */
+  const fs = []; NOTE_FEEL.forEach(([v, re]) => { let m; re.lastIndex = 0; while ((m = re.exec(t))) { const pre = t.slice(Math.max(0, m.index - 12), m.index); fs.push(/(nicht|kein\w*|wenig)\s*(so\s*)?$/.test(pre) ? (v >= 4 ? 2 : v <= 2 ? 3 : v) : v); } });
+  if (fs.length) r.feel = Math.max(1, Math.min(5, Math.round(fs.reduce((a, b) => a + b, 0) / fs.length)));
+  NOTE_TAGS.forEach(([lab, re]) => { if (re.test(t)) r.tags.push(lab); });
+  /* Anzeige */
+  const de1 = x => (Math.round(x * 100) / 100).toLocaleString("de-DE");
+  if (r.dist != null) r.chips.push(swim ? Math.round(r.dist * 1000).toLocaleString("de-DE") + " m" : de1(r.dist) + " km");
+  if (r.dur != null) r.chips.push((r.durEst ? "≈ " : "") + (r.durEst || Math.abs(r.dur - Math.round(r.dur)) < .02 ? Math.round(r.dur) + " min" : Math.floor(r.dur) + ":" + String(Math.round((r.dur % 1) * 60)).padStart(2, "0") + " min") + (r.durEst ? " (geschätzt)" : ""));
+  if (r.segs.length) r.chips.push(segText(r.segs, sport));
+  if (r.hf != null) r.chips.push("Ø HF " + r.hf); if (r.hfmax != null) r.chips.push("max " + r.hfmax);
+  if (r.rpe != null) r.chips.push("RPE " + r.rpe); if (r.hm != null) r.chips.push(r.hm + " Hm");
+  if (r.feel != null) r.chips.push("Gefühl " + NOTE_FEEL_LAB[r.feel]);
+  if (r.pain === 0) r.chips.push("Schmerzfrei"); else if (r.pain) r.chips.push("Schmerz: " + r.painTxt);
+  if (r.tags.length) r.chips.push(r.tags.join(", "));
+  if (r.st === "½") r.chips.push("Abgebrochen");
+  return r;
+}
+function segText(segs, sport) {
+  if (!segs || !segs.length) return ""; const swim = sport === "Schwimmen";
+  const d = km => km == null ? "" : swim || km < 1 ? Math.round(km * 1000) + " m" : (Math.round(km * 1000) / 1000).toLocaleString("de-DE") + " km";
+  const p = x => x ? "@" + Math.floor(x) + ":" + String(Math.round((x % 1) * 60)).padStart(2, "0") : "";
+  return segs.map(s => s.kind === "wu" ? "WU " + (s.km != null ? d(s.km) : Math.round(s.min) + " min") : s.kind === "cd" ? "CD " + (s.km != null ? d(s.km) : Math.round(s.min) + " min")
+    : s.n + "×" + (s.eachMin != null ? Math.round(s.eachMin * 10) / 10 + " min" : d(s.each)) + (s.pace ? " " + p(s.pace) : "") + (s.inT ? " in " + p(s.inT).slice(1) : "") + (s.kind === "trab" ? " Trab" : "")).join(" · ");
+}
+G.Engine = { parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
   util: { timeRange, hhmm, sd, serialOf, fmtD, wdD, mss, hms, r1, WD, WDL, tStart, RACE_TYPES, stageOf } };
 })(typeof window !== "undefined" ? window : globalThis);

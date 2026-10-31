@@ -1,4 +1,4 @@
-/* Triger 3.4 (vormals Performance Lab). Oberfläche. Daten bleiben auf dem Gerät (IndexedDB) und in der Sync-Datei, die du selbst wählst.
+/* Gehhilfe 4.0 (vormals Triger, Performance Lab). Oberfläche. Ab 4.0 ohne Excel: Plan und Einträge leben nur in der App, Export auf Knopfdruck. Daten bleiben auf dem Gerät (IndexedDB) und in der Sync-Datei, die du selbst wählst.
    Keine externen Requests, kein Tracking. Planlogik ausschließlich in engine.js. */
 (function () {
 "use strict";
@@ -66,13 +66,13 @@ const ui = (k, cls) => `<svg class="ico ${cls || ""}" viewBox="0 0 24 24" aria-h
 /* ---------- Zustand und Speicher ---------- */
 let B = null, ST = {}, PREF = { theme: "system" }, tab = "heute", planZoom = "woche", planWeek = null, planMonth = null, planDay = null, selId = null, LP = [], ALERT = "";
 let syncState = "off", syncMsg = "Nur auf diesem Gerät";
-const H = { sync: null, xl: null, xlAt: 0, xlState: "off" };
+const H = { sync: null, exp: null, expAt: 0, expState: "off" };
 const dbP = new Promise((res, rej) => { const r = indexedDB.open("perflab-app", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 const idbGet = async k => { const db = await dbP; return new Promise(r => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => r(q.result); q.onerror = () => r(undefined); }); };
 const idbPut = async (k, v) => { const db = await dbP; return new Promise(r => { const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").put(v, k); tx.oncomplete = () => r(true); tx.onerror = () => r(false); }); };
 const idbDel = async k => { const db = await dbP; db.transaction("kv", "readwrite").objectStore("kv").delete(k); };
 let saveT = null;
-const saveState = () => { clearTimeout(saveT); saveT = setTimeout(() => idbPut("state", ST), 120); scheduleSync(); scheduleXl(); };
+const saveState = () => { clearTimeout(saveT); saveT = setTimeout(() => idbPut("state", ST), 120); scheduleSync(); scheduleExp(); };
 const get = k => E.val(ST, k);
 function put(k, v) { ST[k] = { v, t: Date.now() }; MEMO.k = null; saveState(); }
 function set(k, v) { put(k, v); render(); }
@@ -287,7 +287,7 @@ function briefing(c, h) {
   const focus = s ? (wy ? wy.zweck.split(/[.:]/)[0] + "." : "") : "Schlaf, Essen und lockere Bewegung machen dich schneller.";
   const hard = s && E.isHard(s), headline = sickNow ? "Heute zählt Erholung" : !s ? (h ? "Ruhetag, morgen geht es weiter" : "Ruhetag") : ready.cls === "bad" ? "Heute nur locker" : s.test === "race" ? "Renntag. Vertrau deiner Vorbereitung" : s.test === "test" ? "Testtag: ausgeruht und gleichmäßig" : s.code === "LR" ? "Heute zählt Ausdauer" : s.code === "LRM" ? "Heute zählt Ausdauer mit Marathontempo" : hard ? "Heute zählt Qualität" : "Heute locker bleiben";
   const mcR = E.morningReady(B, ST, t);
-  let x = `<section class="brief tri rise" aria-label="Triger, dein Coach"><img class="tri-av" src="triger.svg" alt=""><div class="tri-tx"><span class="tri-k">Triger</span><h2>${esc(headline)}</h2><p class="br-txt">${esc(focus)} ${esc(ready.txt)}</p></div><button class="readyb ${ready.cls}" data-act="checkin" data-w="${c.cw}" aria-label="Bereitschaft ${esc(ready.lab)}, Check-in öffnen"><b>${esc(ready.lab)}</b><span>Form ${tsb > 0 ? "+" : ""}${Math.round(tsb)}</span></button>
+  let x = `<section class="brief tri rise" aria-label="Gehhilfe, dein Coach"><img class="tri-av" src="gehhilfe-mark.svg" alt=""><div class="tri-tx"><span class="tri-k">Gehhilfe</span><h2>${esc(headline)}</h2><p class="br-txt">${esc(focus)} ${esc(ready.txt)}</p></div><button class="readyb ${ready.cls}" data-act="checkin" data-w="${c.cw}" aria-label="Bereitschaft ${esc(ready.lab)}, Check-in öffnen"><b>${esc(ready.lab)}</b><span>Form ${tsb > 0 ? "+" : ""}${Math.round(tsb)}</span></button>
     <div class="tri-acts">${mcR ? "" : `<button class="bchip cta" data-act="mc" data-v="${t}">${ui("sun")}<span><b>Morgen-Check</b> · 10 Sekunden</span></button>`}${s && (s.min >= 45 || s.test) ? `<button class="bchip" data-act="fuel" data-id="${esc(s.id)}">${ui("fork")}<span>Verpflegung</span></button>` : ""}<button class="bchip" data-act="ai">${ui("sync")}<span>KI-Coach</span></button></div></section>`;
   return x;
 }
@@ -295,7 +295,7 @@ function vHeute(c) {
   const t = c.t, h = heroPick(c), v = verdict(c.cw), sick = get("sick"), sickNow = sick && num(sick.from) && !num(sick.to);
   LP = c.P;
   const open = c.Ex.filter(s => s.date < t && s.date >= t - 14 && needs(s, t) && !s.dropped);
-  let x = `<header class="lt"><div><div class="eyebrow">${esc(longDate(t))}${c.pre ? " · Start in " + (B.S.start - t) + " Tagen" : " · Woche " + c.cw + " von " + c.NW}</div><h1>Übersicht</h1></div><div class="acts"><button class="avatar" data-tab="prof" aria-label="Profil"><img src="triger.svg" alt=""></button></div></header>`;
+  let x = `<header class="lt"><div><div class="eyebrow">${esc(longDate(t))}${c.pre ? " · Start in " + (B.S.start - t) + " Tagen" : " · Woche " + c.cw + " von " + c.NW}</div><h1>Übersicht</h1></div><div class="acts"><button class="avatar" data-tab="prof" aria-label="Profil"><img src="gehhilfe.svg" alt=""></button></div></header>`;
   x += banners();
   if (sickNow) { const sc = E.SICK_CAT[sick.cat], hals = sick.cat === "hals", inj = sick.cat === "verletzung" && E.REGIONS[sick.region];
     x += `<div class="banner ${hals ? "" : "err"}">${ui("sick")}<div class="tx"><b>${esc(sc ? sc.short : "Krank")} seit ${esc(U.wdD(sick.from))}</b> ${hals ? "Nur locker, höchstens 45 Minuten." : inj ? "Pausiert: " + esc(inj.aff.join(", ")) + ". Rest nur schmerzfrei." : "Kein Training, nichts zählt als verpasst."}</div><span class="bt" style="display:flex;gap:6px">${sc ? "" : `<button class="btn sm ghost" data-act="sick">Details</button>`}<button class="btn sm" data-act="sickend">Wieder gesund</button></span></div>`; }
@@ -304,7 +304,7 @@ function vHeute(c) {
   if (h) {
     const s = h.s, z = zoneOf(s, c), S = sp(s.sport), wake = s.wake && h.when === "Morgen" ? "Wecker " + s.wake : s.wake && h.when === "Heute" ? "Wecker " + s.wake : "";
     x += `<article class="bib rise" style="--c:${s.test === "race" ? "var(--gold-s)" : s.test === "test" ? "var(--tartan)" : S.c}">
-      <div class="band"><span>${icon(s.sport)}${h.doneToday ? "Heute erledigt · Als Nächstes" : "Als Nächstes"}</span><span>${esc(h.when)}${s.time ? " · " + esc(s.time.slice(0, 5)) : ""}</span></div><svg class="stripes" viewBox="0 0 120 120" aria-hidden="true"><path d="M70 0h14L40 120H26zM96 0h10L62 120H52zM118 0h6L84 120h-6z"/></svg>
+      <div class="band"><span>${icon(s.sport)}${h.doneToday ? "Heute erledigt · Als Nächstes" : "Als Nächstes"}</span><span>${esc(h.when)}${s.time ? " · " + esc(s.time.slice(0, 5)) : ""}</span></div><i class="lanes" aria-hidden="true"></i>
       <div class="bd"><div class="when">${esc(S.lab)}${s.prio === "A" ? " · Schlüsseleinheit" : ""}${s.test === "test" ? " · Test" : ""}</div><h2>${esc(s.name.replace(/^★\s*/, ""))}</h2>
        <div class="big">${s.km ? `<b>${esc(s.sport === "Schwimmen" ? Math.round(s.km * 1000).toLocaleString("de-DE") : de(s.km))}<small>${s.sport === "Schwimmen" ? "m" : "km"}</small></b>` : ""}${s.min ? `<b>${esc(durShort(s.min))}<small>${s.min < 60 ? "min" : "h"}</small></b>` : ""}</div>
        ${z.pace || z.hf ? `<div class="zone">${z.pace ? `<span>${esc(z.pace)}</span>` : ""}${z.hf ? `<span>${ui("heart")}HF ${esc(z.hf)}</span>` : ""}</div>` : ""}
@@ -315,7 +315,7 @@ function vHeute(c) {
   if (open.length) x += `<div class="openbar"><div class="tx"><b>${open.length} ${open.length === 1 ? "Einheit" : "Einheiten"} offen</b><span>${esc(open.slice(0, 3).map(s => U.WD[U.sd(s.date).getUTCDay()] + " " + s.name.replace(/^★\s*/, "")).join(", "))}${open.length > 3 ? " …" : ""}</span></div><span class="bt"><button class="btn sm" data-act="review">Ansehen</button><button class="btn sm ink" data-act="allok">${ui("check")}Alle erledigt</button></span></div>`;
   // Coach: automatische Anpassungen, danach offene Vorschläge
   const cc = coachCards(c), ccN = (cc.match(/class="prop auto/g) || []).length;
-  if (ccN) x += fold("heute:Plan angepasst", "Triger hat deinen Plan angepasst", ccN + " neu", cc, { ic: ["sync", "var(--tartan)"], cls: "hot" });
+  if (ccN) x += fold("heute:Plan angepasst", "Die Gehhilfe hat deinen Plan angepasst", ccN + " neu", cc, { ic: ["sync", "var(--tartan)"], cls: "hot" });
   x += LP.map((p, i) => propCard(p, i, "")).join("");
   x += dashGrid(c, h);
   return x;
@@ -405,7 +405,7 @@ function sessView(id, D) {
   if (st === "✗") x += `<div class="grp" style="margin-bottom:12px"><div class="row plain"><span class="stmark miss">${ui("x")}</span><span class="tx"><span class="t1">Verpasst</span><span class="t2">${esc({ zeit: "Keine Zeit", muede: "Müde oder Schmerz", krank: "Krank", reise: "Reise" }[l.why] || "Grund offen")}</span></span><button class="btn sm" data-act="mode" data-v="miss">Ändern</button></div></div>`;
   if (s.orig) x += `<div class="banner info">${ui("info")}<div class="tx">Angepasst. Ursprünglich ${esc(s.orig.name)}${s.orig.km ? ", " + de(s.orig.km) + " km" : s.orig.min ? ", " + s.orig.min + " min" : ""}.${s.note ? " " + esc(s.note) : ""}</div></div>`;
   if (s.movedFrom) x += `<div class="banner info">${ui("move")}<div class="tx">Verschoben von ${esc(U.wdD(s.movedFrom))}.</div></div>`;
-  const nach = nachOf(c, s); if (nach) x += `<div class="banner info">${ui("move")}<div class="tx">Nachgeholt am ${esc(U.wdD(nach.date))}${nach.time ? " · " + esc(nach.time) : ""}. Ergebnis wird dort eingetragen und landet beim Zurückschreiben in dieser Excel-Zeile.</div><button class="btn sm" data-act="sess" data-id="${esc(nach.id)}">Öffnen</button></div>`;
+  const nach = nachOf(c, s); if (nach) x += `<div class="banner info">${ui("move")}<div class="tx">Nachgeholt am ${esc(U.wdD(nach.date))}${nach.time ? " · " + esc(nach.time) : ""}. Ergebnis wird dort eingetragen.</div><button class="btn sm" data-act="sess" data-id="${esc(nach.id)}">Öffnen</button></div>`;
   const spk = !s.dropped && E.lrSpike(c.Ex, s); if (spk) x += `<div class="banner">${ui("info")}<div class="tx">Geplanter Sprung: +${Math.round(spk.pct * 100)} % zum längsten Lauf der 30 Tage davor (${de(spk.ref)} km). Ab 10 % steigt laut Studie das Überlastungsrisiko.</div>${infoBtn("lrspike")}</div>`;
   // Warum: sichtbar als Coach-Notiz, Quellen aufklappbar
   if (wy) x += `<div class="coachnote"><div class="cn-h">${ui("book")}<b>${esc(wy.t)}: darum geht es</b><span class="ev ev${wy.ev}" title="${esc(E.EV_LAB[wy.ev])}">${wy.ev}</span></div><p>${esc(wy.zweck)}</p><p class="dos"><b>So läufst du richtig:</b> ${esc(wy.dos)}</p>${wy.hint ? `<p class="hint">${esc(wy.hint)}</p>` : ""}<details><summary>Evidenz und Quellen</summary><p class="note">${esc(E.EV_LAB[wy.ev])}.</p><ul class="srcl">${wy.src.map(k => `<li>${esc(E.SRC[k])}</li>`).join("")}</ul></details></div>`;
@@ -478,6 +478,7 @@ function logForm(s, D, c) {
   const F = D.f, sport = s.sport, endu = ["Lauf", "Rad", "Schwimmen", "Triathlon"].includes(sport), swim = sport === "Schwimmen";
   let x = `<div class="planned" style="margin-bottom:12px"><span>Geplant ${s.km ? "<b>" + esc(kmStr(s.km, sport)) + "</b> · " : ""}<b>${esc(durStr(s.min))}</b></span>${F.hfHint ? `<span>Zone ~<b>${F.hfHint}</b> bpm</span>` : ""}</div>`;
   x += `<div class="seg" role="group" aria-label="Status" style="margin-bottom:12px"><button type="button" data-act="setf" data-f="st" data-v="✓" aria-pressed="${F.st === "✓"}">Erledigt</button><button type="button" data-act="setf" data-f="st" data-v="½" aria-pressed="${F.st === "½"}">Teilweise</button></div>`;
+  x += noteField(F, sport);
   x += `<div class="field"><div class="fl"><span>Dauer</span><b>min oder h:mm</b></div>${stepper("dur", fmtDurIn(F.dur), { step: 5, lab: "Dauer", mode: "numeric" })}</div>`;
   if (endu) x += `<div class="field"><div class="fl"><span>Distanz</span><b>${swim ? "Meter" : "km"}</b></div>${stepper("dist", fmtDistIn(F.dist, sport), { step: swim ? 100 : sport === "Rad" ? 5 : .5, lab: "Distanz" })}<div class="derived" id="derived" aria-live="polite">${derivedTxt(F, sport)}</div></div>`;
   if (endu && !swim) x += `<div class="field"><div class="fl"><span>Ø Herzfrequenz</span><b>bpm, optional</b></div>${stepper("hf", F.hf ?? "", { step: 1, lab: "Durchschnittspuls", mode: "numeric", ph: F.hfHint ? String(F.hfHint) : "–" })}</div>`;
@@ -489,11 +490,37 @@ function logForm(s, D, c) {
     if (swim) x += `<div class="field"><div class="fl"><span>Anteil mit Pullbuoy</span><b>${num(F.pull) ? F.pull + " %" : "optional"}</b></div><div class="seg">${[0, 25, 50, 75].map(n => `<button type="button" data-act="setf" data-f="pull" data-v="${n}" aria-pressed="${F.pull === n}">${n} %</button>`).join("")}</div></div>`;
     x += `<div class="field"><div class="fl"><span>Gefühl</span></div><div class="chips">${[[1, "Platt"], [2, "Müde"], [3, "Okay"], [4, "Gut"], [5, "Top"]].map(([n, lab]) => `<button type="button" class="chip" data-act="setf" data-f="feel" data-v="${n}" aria-pressed="${F.feel === n}">${lab}</button>`).join("")}</div></div>`;
     if (sport === "Lauf" && B.shoes.length) x += `<div class="field"><div class="fl"><span>Schuh</span></div><select class="inp" data-in="shoe"><option value="">Standard</option>${B.shoes.map(z => `<option${F.shoe === z.name ? " selected" : ""}>${esc(z.name)}</option>`).join("")}</select></div>`;
-    x += `<div class="field"><div class="fl"><span>Notiz</span></div><textarea class="inp" data-in="note" rows="2" placeholder="Wie lief es?">${esc(F.note)}</textarea></div>`;
   }
   x += `<div class="sh-foot"><button class="btn" data-act="mode" data-v="">Abbrechen</button><button class="btn pri" data-act="savelog" data-id="${esc(s.id)}" autofocus>${ui("check")}Speichern</button></div>`;
   return x;
 }
+/* 4.0: Freitext ist die Haupteingabe. Die App liest Struktur, Distanz, Dauer, Puls, Gefühl, Schmerz und Erholung heraus
+   und füllt die Felder darunter. Was du selbst in einem Feld änderst, überschreibt der Text nicht mehr. */
+const NOTE_PH = { Lauf: "z. B. 2 km WU, 5×1 km @4:50, 1 km CD, Puls 152, gut, keine Schmerzen", Rad: "z. B. 62 km in 2:10 h, 650 Hm, Puls 138, top", Schwimmen: "z. B. 1.500 m, 6×100 @2:05, Technik gut, Schulter frei", Kraft: "z. B. 40 min Ganzkörper, schwere Beine, danach Sauna", Mobility: "z. B. 20 min Dehnen, Hüfte locker" };
+function noteField(F, sport) {
+  return `<div class="field notef"><div class="fl"><span>Wie lief es?</span><b>füllt die Felder selbst</b></div><textarea class="inp" id="in-note" data-in="note" rows="3" maxlength="600" placeholder="${esc(NOTE_PH[sport] || NOTE_PH.Lauf)}" aria-describedby="parsed">${esc(F.note)}</textarea><div class="parsed" id="parsed" aria-live="polite">${parsedHTML(F)}</div></div>`;
+}
+function parsedHTML(F) { const P = F.P; if (!P || !P.chips || !P.chips.length) return ""; return `<span class="pl">${ui("check")}Erkannt</span>${P.chips.map(c => `<span class="pc">${esc(c)}</span>`).join("")}`; }
+const NOTE_KEYS = ["dur", "dist", "hf", "hfmax", "rpe", "feel", "hm"];
+function easyPaceFor(s, sport) { if (s && s.km && s.min && sport === "Lauf") return Math.max(4.5, Math.min(7.5, s.min / s.km + .25)); return null; }
+function applyNote(cur, opts) {
+  const F = cur.D.f; if (!F) return; const s = formS(cur), sport = s ? s.sport : F.sport;
+  F.touch = F.touch || {}; F.auto = F.auto || {}; if (!F.base) F.base = Object.fromEntries(NOTE_KEYS.concat("st").map(k => [k, F[k]]));
+  const P = E.parseNote(F.note, { sport, easyPace: easyPaceFor(s, sport) }); F.P = P;
+  NOTE_KEYS.forEach(k => { if (F.touch[k]) return; let v = P[k]; if (k === "dur" && num(v)) v = Math.round(v);
+    if (v != null) { F[k] = v; F.auto[k] = 1; } else if (F.auto[k]) { F[k] = F.base[k]; delete F.auto[k]; } });
+  if (!F.touch.st && "st" in F) { if (P.st === "½") { F.st = "½"; F.auto.st = 1; } else if (F.auto.st) { F.st = F.base.st; delete F.auto.st; } }
+  let resport = false; if (!s && P.sport && !F.touch.sport && P.sport !== F.sport) { F.sport = P.sport; resport = true; }
+  if (resport || (opts && opts.full)) { const pos = $("#in-note") ? $("#in-note").selectionStart : null; cur.re(); const ta = $("#in-note", ($(".sheet-wrap:last-child .sheet") || $("#insp") || document)); if (ta) { ta.focus(); if (pos != null) ta.setSelectionRange(pos, pos); } return; }
+  const root = $(".sheet-wrap:last-child .sheet") || $("#insp") || document;
+  syncInputs(F, sport);
+  $$("[data-act=setf][data-f=rpe]", root).forEach(b => { const on = +b.dataset.v === F.rpe; b.setAttribute("aria-checked", on); b.classList.toggle("on", on); });
+  $$("[data-act=setf][data-f=feel]", root).forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === F.feel));
+  $$("[data-act=setf][data-f=st]", root).forEach(b => b.setAttribute("aria-pressed", b.dataset.v === F.st));
+  const pz = $("#parsed", root); if (pz) pz.innerHTML = parsedHTML(F);
+}
+const noteExtra = F => { const P = F.P || (F.note ? E.parseNote(F.note, { sport: F.sport }) : null); if (!P) return { pain: undefined, painTxt: undefined, tags: undefined, segs: undefined };
+  return { pain: P.pain, painTxt: P.painTxt, tags: P.tags && P.tags.length ? P.tags : undefined, segs: P.segs && P.segs.length ? P.segs.map(({ pos, ...x }) => x) : undefined }; };
 function missForm(s, D, c) {
   const l = log(s), why = D.why || (l.st === "✗" ? l.why : "");
   let x = `<p style="color:var(--ink2);margin:0 2px 12px">Was ist passiert? Die App schlägt danach vor, wie es weitergeht.</p><div class="chips" role="group" aria-label="Grund">${[["zeit", "Keine Zeit", "cal"], ["muede", "Müde oder Schmerz", "heart"], ["krank", "Krank", "sick"], ["reise", "Reise", "plane"]].map(([k, lab, ic]) => `<button type="button" class="chip" data-act="why" data-id="${esc(s.id)}" data-v="${k}" aria-pressed="${why === k}">${ui(ic)}${lab}</button>`).join("")}</div>`;
@@ -516,6 +543,7 @@ function freeForm(D) {
   const swim = F.sport === "Schwimmen";
   let x = `<div class="sh-head"><span class="badge-ic" style="--c:${sp(F.sport).c};--t:${sp(F.sport).t}">${icon(F.sport)}</span><div class="tx"><h2 class="sheet-title" tabindex="-1">${D.edit ? "Training bearbeiten" : "Training hinzufügen"}</h2><p>Nicht geplant, zählt trotzdem für Umfang und Form</p></div><button class="closebtn" data-act="close" aria-label="Schließen">${ui("x")}</button></div>`;
   x += `<div class="chipline" style="margin-bottom:12px"><div class="chips" style="flex-wrap:nowrap">${["Lauf", "Rad", "Schwimmen", "Kraft", "Mobility", "Sonstiges"].map(k => `<button type="button" class="chip" data-act="setf" data-f="sport" data-v="${k}" aria-pressed="${F.sport === k}">${icon(k)}${sp(k).lab}</button>`).join("")}</div></div>`;
+  x += noteField(F, F.sport);
   x += `<div class="two"><div class="field"><div class="fl"><span>Datum</span></div><input type="date" class="inp" data-in="date" value="${dateVal(F.date)}"></div><div class="field"><div class="fl"><span>Name</span></div><input class="inp" data-in="name" value="${esc(F.name)}" placeholder="${F.sport === "Sonstiges" ? "z. B. Skitour" : "optional"}"></div></div>`;
   x += `<div class="field" style="margin-top:10px"><div class="fl"><span>Dauer</span><b>min oder h:mm</b></div>${stepper("dur", fmtDurIn(F.dur), { step: 5, lab: "Dauer", mode: "numeric" })}</div>`;
   if (["Lauf", "Rad", "Schwimmen", "Sonstiges"].includes(F.sport)) x += `<div class="field"><div class="fl"><span>Distanz</span><b>${swim ? "Meter" : "km"}, optional</b></div>${stepper("dist", fmtDistIn(F.dist, F.sport), { step: swim ? 100 : F.sport === "Rad" ? 5 : .5, lab: "Distanz", ph: "–" })}<div class="derived" id="derived">${derivedTxt(F, F.sport)}</div></div>`;
@@ -590,7 +618,7 @@ const INFO = () => ({
    <p class="note">Quellen: Daniels J., Gilbert J. (1979), Oxygen Power. Daniels J., Daniels' Running Formula. Rechner: <a href="https://vdoto2.com/calculator" target="_blank" rel="noopener">vdoto2.com</a>.</p>`],
   prog: ["Marathon-Prognose", `<p>Aus deinem letzten 10-km-Test, HM oder Marathon rechnet die App eine HM-Äquivalenz und daraus die Marathonzeit nach Riegel: T2 = T1 × (D2/D1)^k.</p><p><b>Spanne statt Punktwert:</b> k = 1,06 ist Riegels Originalwert und für Freizeitläufer eher optimistisch. In einer Studie mit 2.303 Freizeitläufern lag Riegel bis zum HM gut, schätzte den Marathon aber für die Hälfte der Läufer mindestens 10 Minuten zu schnell (Vickers & Vertosick 2016). Die App zeigt deshalb 1,06 bis 1,08, bei 1:30 im HM sind das 3:07:39 bis 3:10:16. Auch die vorsichtige Grenze kann für dich noch zu schnell sein, weil die Studie Abweichungen von 10 Minuten und mehr zeigt. Die Checkpoints nutzen den optimistischen Wert, damit ein erfülltes Gate noch Luft lässt.</p><p>Ohne Test gilt deine Bestzeit aus dem Plan. Für 3:09 brauchst du einen HM von etwa ${U.hms(C().R.needHM)}.</p><p class="note">Quellen: Riegel P.S. (1981), Athletic Records and Human Endurance, American Scientist 69:285–90. Vickers A.J., Vertosick E.A. (2016), An empirical study of race times in recreational endurance runners, BMC Sports Sci Med Rehabil 8:26, <a href="https://pubmed.ncbi.nlm.nih.gov/27570626/" target="_blank" rel="noopener">PubMed</a>.</p>`],
   intens: ["Intensitätsverteilung", `<p>Die App ordnet die Trainingszeit drei Bereichen zu. <b>Locker</b> liegt unter etwa 89 % deines Schwellenpulses, <b>mittel</b> bei 89–95 %, <b>hart</b> darüber. Ohne Puls nutzt sie deine RPE (bis 4 locker, 5–6 mittel, ab 7 hart), sonst den Einheitentyp.</p><p><b>Einordnung:</b> Gute Ausdauersportler trainieren überwiegend locker. Eine starre Quote wie 80/20 ist aber nicht belegt. Eine Metaanalyse fand Vorteile der polarisierten Verteilung nur kurzfristig und nur bei Hochtrainierten (Silva Oliveira et al. 2024). In den Strava-Daten von 119.452 Marathonläufern unterschieden sich Schnelle vor allem im lockeren Umfang (Muniz-Pumares et al. 2025). Entscheidend ist also der Umfang. Viel mittlere Intensität in lockeren Läufen kostet trotzdem Frische für die harten Tage.</p><p class="note">Quellen: Seiler S. (2010), Int J Sports Physiol Perform 5(3):276–91. Silva Oliveira P. et al. (2024), Sports Med 54:2071–95, PMID 38717713. Muniz-Pumares D. et al. (2025), Sports Med 55(4):1023–35, PMID 39616560.</p>`],
-sick: ["Krank: Regeln und Quellen", `<p><b>Kategorien statt Diagnosen.</b> Du wählst, was ungefähr zutrifft. Die App leitet daraus nur Trainingsregeln ab und stellt keine Diagnose.</p><p><b>Erkältung oberhalb des Halses:</b> lockeres Training bis 45 Minuten bleibt erlaubt, harte Einheiten werden entschärft. Grundlage ist der „Neck-Check“, eine verbreitete klinische Faustregel, die nicht in Studien validiert ist. Gestützt wird sie durch einen kleinen Versuch, in dem moderates Training während eines Rhinovirus-Schnupfens Dauer und Schwere nicht veränderte (Weidner et al. 1998).</p><p><b>Fieber oder Allgemeinsymptome:</b> kein Training. Der IOC-Konsens 2022 empfiehlt bei Infekten einen gestuften, symptomgeführten Wiedereinstieg und ärztliche Abklärung bei Warnzeichen wie Brustschmerz, Herzstolpern oder Atemnot. Hintergrund ist das seltene, aber ernste Risiko einer Herzmuskelbeteiligung. Die App beginnt erst nach dem Ende der Symptome und plant mindestens 5 Tage Wiedereinstieg.</p><p><b>Magen-Darm:</b> erst wieder normal essen und trinken. Flüssigkeit und Salz auffüllen. Dafür gibt es keine spezifische Studienlage, die Regel ist eine vorsichtige Ableitung.</p><p><b>Verletzung oder Schmerz:</b> Die betroffenen Sportarten werden ersetzt, zum Beispiel Laufen durch Rad bei Wade oder Fuß und Rad durch Schwimmen mit Pullbuoy beim Knie. Die Grenze „Schmerz höchstens 2 von 10, am nächsten Morgen nicht schlimmer“ ist bewusst vorsichtig gewählt. Im Schmerzmonitoring-Modell von Silbernagel et al. (2007) für die Achillessehne waren bis 5 von 10 zulässig, allerdings unter physiotherapeutischer Anleitung.</p><p><b>Wiedereinstieg in Stufen:</b> Die Gesamtdauer hängt von Kategorie und Krankheitstagen ab: Erkältung Tage + 1 (2–7), Infekt 2 × Tage (5–14), Magen-Darm Tage + 2 (3–7), Verletzung 2 × Tage (4–14). Sie ist geteilt in ca. 30 % sehr locker und kurz, 40 % locker ohne harte Reize und 30 % mit einer harten Einheit zu 80 %. Diese Aufteilung ist eine eigene Regel und keine Studienvorgabe. Sie folgt dem Prinzip des IOC-Konsenses: Steigern, solange die Symptome wegbleiben, sonst eine Stufe zurück.</p><p><b>Folgewochen:</b> Verpasstes wird nicht nachgeholt, weil Nachholen Belastung staut. Tests rücken hinter den Wiedereinstieg, denn ein Test im angeschlagenen Zustand würde deine Paces falsch kalibrieren. Rennen werden nie verschoben, die App weist nur auf das Risiko hin. Der erste Long Run danach wird gedeckelt: höchstens so lang wie der längste Lauf vor der Krankheit, nach mehr als 7 Tagen Pause höchstens 80 % davon. Das ist abgeleitet aus Frandsen et al. (2025), wonach einzelne Läufe mit mehr als 10 % über dem längsten der letzten 30 Tage das Überlastungsrisiko erhöhen.</p><p><b>Datenschutz:</b> Kategorie, Region und Warnzeichen liegen nur in der App-Datenbank auf dem Gerät und in deiner Sync- oder Sicherungsdatei. Im Excel-Protokoll stehen sie nicht.</p><p class="note">Quellen: Schwellnus M. et al. (2022), IOC consensus statement on acute respiratory illness in athletes, part 1, Br J Sports Med, <a href="https://doi.org/10.1136/bjsports-2022-105759" target="_blank" rel="noopener">doi</a>. Weidner T.G. et al. (1998), Med Sci Sports Exerc 30(11):1578–83, <a href="https://pubmed.ncbi.nlm.nih.gov/9813869/" target="_blank" rel="noopener">PubMed</a>. Silbernagel K.G. et al. (2007), Am J Sports Med 35(6):897–906. Frandsen J.S.B. et al. (2025), Br J Sports Med 59(17):1203–10, <a href="https://pubmed.ncbi.nlm.nih.gov/40623829/" target="_blank" rel="noopener">PubMed</a>. Keine ärztliche Beratung.</p>`],
+sick: ["Krank: Regeln und Quellen", `<p><b>Kategorien statt Diagnosen.</b> Du wählst, was ungefähr zutrifft. Die App leitet daraus nur Trainingsregeln ab und stellt keine Diagnose.</p><p><b>Erkältung oberhalb des Halses:</b> lockeres Training bis 45 Minuten bleibt erlaubt, harte Einheiten werden entschärft. Grundlage ist der „Neck-Check“, eine verbreitete klinische Faustregel, die nicht in Studien validiert ist. Gestützt wird sie durch einen kleinen Versuch, in dem moderates Training während eines Rhinovirus-Schnupfens Dauer und Schwere nicht veränderte (Weidner et al. 1998).</p><p><b>Fieber oder Allgemeinsymptome:</b> kein Training. Der IOC-Konsens 2022 empfiehlt bei Infekten einen gestuften, symptomgeführten Wiedereinstieg und ärztliche Abklärung bei Warnzeichen wie Brustschmerz, Herzstolpern oder Atemnot. Hintergrund ist das seltene, aber ernste Risiko einer Herzmuskelbeteiligung. Die App beginnt erst nach dem Ende der Symptome und plant mindestens 5 Tage Wiedereinstieg.</p><p><b>Magen-Darm:</b> erst wieder normal essen und trinken. Flüssigkeit und Salz auffüllen. Dafür gibt es keine spezifische Studienlage, die Regel ist eine vorsichtige Ableitung.</p><p><b>Verletzung oder Schmerz:</b> Die betroffenen Sportarten werden ersetzt, zum Beispiel Laufen durch Rad bei Wade oder Fuß und Rad durch Schwimmen mit Pullbuoy beim Knie. Die Grenze „Schmerz höchstens 2 von 10, am nächsten Morgen nicht schlimmer“ ist bewusst vorsichtig gewählt. Im Schmerzmonitoring-Modell von Silbernagel et al. (2007) für die Achillessehne waren bis 5 von 10 zulässig, allerdings unter physiotherapeutischer Anleitung.</p><p><b>Wiedereinstieg in Stufen:</b> Die Gesamtdauer hängt von Kategorie und Krankheitstagen ab: Erkältung Tage + 1 (2–7), Infekt 2 × Tage (5–14), Magen-Darm Tage + 2 (3–7), Verletzung 2 × Tage (4–14). Sie ist geteilt in ca. 30 % sehr locker und kurz, 40 % locker ohne harte Reize und 30 % mit einer harten Einheit zu 80 %. Diese Aufteilung ist eine eigene Regel und keine Studienvorgabe. Sie folgt dem Prinzip des IOC-Konsenses: Steigern, solange die Symptome wegbleiben, sonst eine Stufe zurück.</p><p><b>Folgewochen:</b> Verpasstes wird nicht nachgeholt, weil Nachholen Belastung staut. Tests rücken hinter den Wiedereinstieg, denn ein Test im angeschlagenen Zustand würde deine Paces falsch kalibrieren. Rennen werden nie verschoben, die App weist nur auf das Risiko hin. Der erste Long Run danach wird gedeckelt: höchstens so lang wie der längste Lauf vor der Krankheit, nach mehr als 7 Tagen Pause höchstens 80 % davon. Das ist abgeleitet aus Frandsen et al. (2025), wonach einzelne Läufe mit mehr als 10 % über dem längsten der letzten 30 Tage das Überlastungsrisiko erhöhen.</p><p><b>Datenschutz:</b> Kategorie, Region und Warnzeichen liegen nur in der App-Datenbank auf dem Gerät und in deiner Sync- oder Sicherungsdatei. Im Export stehen sie nicht.</p><p class="note">Quellen: Schwellnus M. et al. (2022), IOC consensus statement on acute respiratory illness in athletes, part 1, Br J Sports Med, <a href="https://doi.org/10.1136/bjsports-2022-105759" target="_blank" rel="noopener">doi</a>. Weidner T.G. et al. (1998), Med Sci Sports Exerc 30(11):1578–83, <a href="https://pubmed.ncbi.nlm.nih.gov/9813869/" target="_blank" rel="noopener">PubMed</a>. Silbernagel K.G. et al. (2007), Am J Sports Med 35(6):897–906. Frandsen J.S.B. et al. (2025), Br J Sports Med 59(17):1203–10, <a href="https://pubmed.ncbi.nlm.nih.gov/40623829/" target="_blank" rel="noopener">PubMed</a>. Keine ärztliche Beratung.</p>`],
 travel: ["Reise: Regeln und Quellen", `<p><b>Ausstattung bestimmt den Ersatz.</b> Mit Laufstrecke bleiben Läufe draußen, auch der Long Run. Mit Laufband werden Qualitätseinheiten zu Laufband-Einheiten, ein Long Run wird auf höchstens 60 Minuten locker gekürzt oder auf einen Tag ohne Reise geschoben. Fitnessraum bedeutet Hotel-Gym und Ergometer statt Rad, Pool bedeutet Techniktraining. Gibt es nur das Zimmer, ersetzt ein Zimmer-Zirkel den lockeren Lauf und Kraft wird zur Zimmer-Kraft.</p><p><b>Laufband auf 1 % Steigung</b> gleicht den fehlenden Luftwiderstand ungefähr aus (Jones & Doust 1996). Die Pace auf dem Band ist trotzdem nicht 1:1 übertragbar, deshalb steuert die HF.</p><p><b>An- und Abreisetag nichts Hartes.</b> Reisemüdigkeit, wenig Schlaf und langes Sitzen mindern Leistung und Erholung. Der Konsens von Janse van Rensburg et al. (2021) empfiehlt Schlaf zu schützen, ausreichend zu trinken und sich zu bewegen. Pro überquerter Zeitzone in Richtung Osten rechnet er mit etwa einem Tag Anpassung, in Richtung Westen mit einem halben.</p><p><b>Schlüsseleinheiten:</b> Passt die Ausstattung, bleiben sie vor Ort, sonst rücken sie auf einen Tag ohne Reise und ohne harte Einheit derselben Sportart daneben. Gibt es keinen solchen Tag, fallen sie weg. Tests kommen nach der Reise, Rennen werden nie verschoben.</p><p><b>Danach:</b> Reisen ab 5 Tagen ohne Lauf-Möglichkeit deckeln den ersten Long Run danach (wie nach Krankheit). Kurze Pausen von wenigen Tagen kosten kaum Fitness, vor allem wenn die Intensität erhalten bleibt (Mujika & Padilla 2000). Deshalb holt die App nichts nach.</p><p class="note">Quellen: Janse van Rensburg D.C. et al. (2021), Managing Travel Fatigue and Jet Lag in Athletes, Sports Med 51:2029–50, <a href="https://doi.org/10.1007/s40279-021-01502-0" target="_blank" rel="noopener">doi</a>. Jones A.M., Doust J.H. (1996), J Sports Sci 14(4):321–7, <a href="https://pubmed.ncbi.nlm.nih.gov/8887211/" target="_blank" rel="noopener">PubMed</a>. Mujika I., Padilla S. (2000), Detraining, Sports Med 30(2):79–87. Frandsen et al. (2025), <a href="https://pubmed.ncbi.nlm.nih.gov/40623829/" target="_blank" rel="noopener">PubMed</a>. Ort und Ausstattung bleiben auf dem Gerät.</p>`],
 lrspike: ["Long Run: Sprung über 10 %", `<p>Die App vergleicht jeden langen Lauf mit dem längsten Lauf der 30 Tage davor. Liegt er mehr als 10 % darüber, zeigt sie einen Hinweis.</p><p>Grundlage ist eine Kohorte mit 5.205 Läufern über 18 Monate. Einzelne Läufe mit mehr als 10 % über dem längsten Lauf der letzten 30 Tage gingen mit einem höheren Risiko für Überlastungsverletzungen einher: +64 % bei 10–30 % Sprung, +52 % bei 30–100 %, +128 % bei mehr als dem Doppelten. Wochenkennzahlen wie die Acute:Chronic Workload Ratio zeigten dort keinen klaren Zusammenhang.</p><p><b>Einordnung:</b> Das ist eine Beobachtungsstudie mit überwiegend Männern mittleren Alters und kein Beweis für Ursache und Wirkung. Die 10 % sind ein Schwellenwert aus der Auswertung, keine getestete Trainingsregel. Dein Plan liegt in 10 Wochen darüber, zum Beispiel W15 mit +18 % oder W39 mit +38 %. Er bleibt, wie er ist. Die App bietet vor diesen Läufen einen Deckel als Vorschlag an, die Entscheidung liegt bei dir.</p><p class="note">Quelle: Frandsen J.S.B. et al. (2025), How much running is too much? Br J Sports Med 59(17):1203–10, <a href="https://doi.org/10.1136/bjsports-2024-109380" target="_blank" rel="noopener">doi</a>, <a href="https://pubmed.ncbi.nlm.nih.gov/40623829/" target="_blank" rel="noopener">PubMed</a>.</p>`],
 food: ["Ernährung: Werte und Quellen", `<p><b>Tagestypen.</b> Die App ordnet jeden Tag nach geplanten Einheiten ein und gibt Kohlenhydrate (KH) und Eiweiß in g pro kg Körpergewicht an.</p><ul style="margin:0;padding-left:18px;line-height:1.6"><li>Ruhetag: 3–5 g/kg KH</li><li>Locker bis 75 min: 5–7 g/kg</li><li>Schlüsseltag (hart oder 75–150 min): 6–8 g/kg</li><li>Langer Tag (Long Run ab 90 min, Koppel, über 150 min): 8–10 g/kg</li><li>Laden vor Marathon und Mitteldistanz: 8–12 g/kg, 36–48 h vorher</li></ul><p>Die Spannen stammen aus dem Positionspapier von ACSM, Academy of Nutrition and Dietetics und Dietitians of Canada (Thomas et al. 2016) sowie aus Burke et al. (2011). Diese Quellen staffeln nach Trainingsumfang, nämlich leicht 3–5, moderat etwa 1 h am Tag 5–7, 1–3 h am Tag 6–10 und 4–5 h am Tag 8–12 g/kg. <b>Die Zuordnung zu deinen Einheitentypen ist eine eigene Ableitung.</b> Dass ein langer Tag bei 8–10 g/kg liegt, also im oberen Bereich, ist bewusst so gewählt, damit vor dem Long Run und dem Koppeltraining genug Glykogen da ist.</p><p><b>Eiweiß:</b> 1,4–2,0 g/kg am Tag. Am besten verteilt auf 3–5 Portionen zu je 0,25–0,4 g/kg, alle 3–4 Stunden (Jäger et al. 2017, Kerksick et al. 2017). Für Ausdauersportler gilt eher der untere bis mittlere Bereich, an harten Tagen der obere.</p><p><b>Beispielmahlzeiten:</b> Mischkost, Mengen werden auf dein Gewicht und das KH-Ziel skaliert. Die Nährwerte sind gerundete Tabellenwerte, die Summe liegt meist innerhalb von ±5 % zum Ziel. Eiweiß liegt in den Beispielen oft etwas über der Spanne. Das ist unkritisch, die Kohlenhydrate sind die Steuergröße.</p><p class="note">Quellen: Thomas D.T., Erdman K.A., Burke L.M. (2016), Position of the ACSM, AND and DC: Nutrition and Athletic Performance, Med Sci Sports Exerc 48(3):543–68, <a href="https://pubmed.ncbi.nlm.nih.gov/26891166/" target="_blank" rel="noopener">PubMed</a>. Burke L.M. et al. (2011), Carbohydrates for training and competition, J Sports Sci 29 Suppl 1:S17–27. Jäger R. et al. (2017), ISSN position stand: protein and exercise, JISSN 14:20, <a href="https://doi.org/10.1186/s12970-017-0177-8" target="_blank" rel="noopener">doi</a>. Kerksick C.M. et al. (2017), ISSN position stand: nutrient timing, JISSN 14:33, <a href="https://doi.org/10.1186/s12970-017-0189-4" target="_blank" rel="noopener">doi</a>. Orientierung, keine Ernährungsberatung.</p>`],
@@ -614,7 +642,7 @@ function kgSheet(D) {
   const F = D.f || (D.f = { kg: KG() ?? 75 });
   return `<div class="sh-head"><span class="badge-ic" style="--c:var(--ok);--t:var(--ok-t)">${ui("fork")}</span><div class="tx"><h2 class="sheet-title" tabindex="-1">Körpergewicht</h2><p>Für Kohlenhydrate und Eiweiß in g/kg.</p></div><button class="closebtn" data-act="close" aria-label="Schließen">${ui("x")}</button></div>
    <div class="field"><div class="fl"><span>Gewicht</span><b>kg, ungefähr reicht</b></div>${stepper("kg", F.kg ?? "", { step: 1, lab: "Körpergewicht", mode: "decimal" })}</div>
-   <p class="note" style="display:flex;gap:8px">${ui("shield")}<span>Bleibt auf dem Gerät und in deiner Sicherungsdatei. Kein Excel-Export.</span></p>
+   <p class="note" style="display:flex;gap:8px">${ui("shield")}<span>Bleibt auf dem Gerät und in deiner Sicherungsdatei. Nicht im Export.</span></p>
    <div class="sh-foot"><button class="btn" data-act="close">Abbrechen</button><button class="btn pri" data-act="savekg">${ui("check")}Speichern</button></div>`;
 }
 function nutSheet(D) {
@@ -683,7 +711,7 @@ function fdSheet(D) {
   let x = `<div class="sh-head"><span class="badge-ic" style="--c:var(--ok);--t:var(--ok-t)">${ui("fork")}</span><div class="tx"><h2 class="sheet-title" tabindex="-1">Ernährungstagebuch</h2><p>${esc(longDate(d))}${N ? " · " + esc(N.lab) + ", Ziel " + N.khT + " g KH" : ""}</p></div><button class="closebtn" data-act="close" aria-label="Schließen">${ui("x")}</button></div>`;
   x += `<div class="dnav"><button class="iconbtn" data-act="fdday" data-v="${d - 1}" aria-label="Vortag">${ui("back")}</button><span>${esc(dayLabel(d, c.t))}</span><button class="iconbtn" data-act="fdday" data-v="${d + 1}" aria-label="Nächster Tag" ${d >= c.t ? "disabled" : ""}>${ui("chev")}</button></div>`;
   x += MEALS.map(([k, lab]) => `<div class="field"><div class="fl"><span>${lab}</span></div><textarea class="inp" data-in="fd_${k}" rows="2" placeholder="${k === "f" ? "z. B. Haferflocken, Banane, Kaffee" : k === "n" ? "z. B. 2,5 l getrunken, Magen ok" : "frei mitschreiben"}">${esc(F[k] || "")}</textarea></div>`).join("");
-  x += `<p class="note" style="display:flex;gap:8px">${ui("shield")}<span>Bleibt auf dem Gerät. Beim Zurückschreiben landet es im Blatt „App-Tagebuch“ der Excel, damit Claude es im Wochen-Review mit auswerten kann.</span></p>`;
+  x += `<p class="note" style="display:flex;gap:8px">${ui("shield")}<span>Bleibt auf dem Gerät. Im Export steht es im Blatt „Tagebuch“, damit das Wochen-Review es mit auswerten kann.</span></p>`;
   x += `<div class="sh-foot"><button class="btn" data-act="nut" data-v="${d}">Empfehlung</button><button class="btn pri" data-act="savefd" data-v="${d}">${ui("check")}Speichern</button></div>`;
   return x;
 }
@@ -977,7 +1005,7 @@ function vProf(c) {
   const sick = get("sick"), sickNow = sick && num(sick.from) && !num(sick.to), standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone, ios = /iPhone|iPad/.test(navigator.userAgent);
   const row = (ic, col, t1, t2, act, extra) => `<button class="row" data-act="${act}" ${extra || ""}><span class="badge-ic" style="--c:${col};--t:color-mix(in srgb,${col} 14%,var(--surface))">${ui(ic)}</span><span class="tx"><span class="t1">${t1}</span>${t2 ? `<span class="t2">${t2}</span>` : ""}</span>${ui("chev", "chev")}</button>`;
   let x = `<header class="lt"><div><div class="eyebrow">Einstellungen und Daten</div><h1>Profil</h1></div></header>`;
-  x += `<div class="prof-hero"><span class="av tiger"><img src="triger.svg" alt=""></span><div class="tx" style="flex:1"><b style="font-size:1.0625rem">Saison 2026/27</b><div class="muted" style="font-size:.8125rem">${B.plan.length} Einheiten · Plan vom ${new Date(B.importedAt).toLocaleDateString("de-DE")}</div></div>${syncPill()}</div>`;
+  x += `<div class="prof-hero"><span class="av logo-av"><img src="gehhilfe-mark.svg" alt=""></span><div class="tx" style="flex:1"><b style="font-size:1.0625rem">Saison 2026/27</b><div class="muted" style="font-size:.8125rem">${B.plan.length} Einheiten · Plan vom ${new Date(B.importedAt).toLocaleDateString("de-DE")}</div></div>${syncPill()}</div>`;
   if (!standalone) x += `<div class="banner info" style="margin-top:12px">${ui("down")}<div class="tx"><b>Als App installieren.</b> ${ios ? "Safari: Teilen, dann Zum Home-Bildschirm." : "Chrome: Menü ⋮, Speichern und teilen, Seite als App installieren."}</div></div>`;
   const absN = E.absences(ST, c.t).filter(a => (a.to != null ? a.to : c.t) >= c.t).length;
   x += `<div class="sec"><h2>Unterwegs und krank</h2></div><div class="grp">${row("cal", "var(--lane)", "Alle Abwesenheiten", absN ? absN + " aktuell oder geplant" : "Liste, bearbeiten, löschen", "abs")}${row("plane", "var(--lane)", "Reise eintragen", trv.length ? trv.map(([, v]) => U.fmtD(v.from) + "–" + U.fmtD(v.to) + (v.eq ? " (" + E.eqText(E.tripEq(v)) + ")" : "")).join(", ") : "Dienstreise mit Ausstattung, Ersatzeinheiten", "travel")}
@@ -990,9 +1018,8 @@ function vProf(c) {
   x += `<div class="sec"><h2>Ernährung</h2></div><div class="grp">${row("fork", "var(--ok)", "Körpergewicht", KG() ? de(KG()) + " kg" : "Noch nicht eingetragen", "kg")}${row("fork", "var(--ok)", "Ernährung heute", "Tagesbedarf und Beispielmahlzeiten", "nut", `data-v="${c.t}"`)}${linz ? row("flag", "var(--gold-s)", "Verpflegungsplan " + esc(linz.name.replace(/^★\s*/, "").replace(/^Marathon\s*/, "")), "Gel- und Trinkplan für das Rennen", "fuel", `data-id="${esc(linz.id)}"`) : ""}${row("book", "var(--ok)", "Ernährung: Quellen", "ACSM, IOC, ISSN", "info", 'data-v="food"')}</div>`;
   x += `<div class="sec"><h2>Mac und iPhone</h2></div><div class="grp">${FSA ? (H.sync ? row("sync", "var(--ok)", "Jetzt abgleichen", esc(syncMsg + " · " + H.sync.name), "syncnow") + row("x", "var(--mute)", "Sync trennen", "Datei bleibt erhalten", "syncoff") : row("sync", "var(--lane)", "Sync-Datei anlegen", "Einmal in iCloud Drive speichern, danach automatisch", "synccreate") + row("file", "var(--lane)", "Vorhandene Sync-Datei wählen", "", "syncopen"))
     : row("down", "var(--lane)", "Stand laden", "Sync-Datei aus iCloud Drive öffnen", "loadjson") + row("up", "var(--lane)", "Stand sichern", "In Dateien sichern und ersetzen", "sharejson")}</div>`;
-  x += `<div class="sec"><h2>Export</h2></div><div class="grp">${row("cal", "var(--tartan)", "Kalender (.ics)", "Ab heute, inklusive Anpassungen", "ics")}${H.xl ? row("file", "var(--ok)", "Excel verbunden: " + H.xl.name, xlLine(), "wb") + row("x", "var(--mute)", "Verbindung trennen", "Die Datei bleibt, wie sie ist", "xloff") : XL_OK ? row("file", "var(--ok)", "Excel verbinden", "Einmal die Datei im Ordner wählen, danach speichert die App selbst", "xlpick") : ""}${H.xl ? "" : row("file", "var(--ok)", "Zurück ins Excel schreiben", get("set:lastwb") ? "Zuletzt " + new Date(get("set:lastwb").at).toLocaleDateString("de-DE") + " · danach alte Datei im Ordner ersetzen" : "Lädt die aktualisierte Datei herunter, alte im Ordner ersetzen", "wb")}${row("file", "var(--mute)", "Protokoll als eigene Datei", "Nur zum Ansehen, ändert den Plan nicht", "xlsx")}${row("up", "var(--mute)", "Sicherung speichern", "Kompletter Stand als Datei", "sharejson")}${row("down", "var(--mute)", "Sicherung laden", "", "loadjson")}</div>`;
-  x += `<div class="sec"><h2>Darstellung</h2></div><div class="grp"><div class="row plain"><span class="badge-ic" style="--c:var(--gold-s);--t:var(--gold)">${ui("sun")}</span><span class="tx"><span class="t1">Erscheinungsbild</span></span><div class="seg" style="width:220px">${[["system", "Auto"], ["light", "Hell"], ["dark", "Dunkel"]].map(([k, l]) => `<button data-act="theme" data-v="${k}" aria-pressed="${PREF.theme === k}">${l}</button>`).join("")}</div></div></div>`;
-  x += `<div class="sec"><h2>Plan</h2></div><div class="grp">${row("file", "var(--ink2)", "Neuen Plan laden", "Excel wählen, Einträge bleiben erhalten", "loadxlsx")}${row("book", "var(--ink2)", "Wie die App anpasst", "Regeln und Quellen", "rules")}${row("trash", "var(--bad)", "Alle Daten löschen", "Nur auf diesem Gerät", "reset")}</div>`;
+  x += `<div class="sec"><h2>Export und Sicherung</h2></div><div class="grp">${row("file", "var(--ok)", "Export (Excel)", "Plan, Ist-Werte, Wochen, Tests, Tagebuch" + (H.exp ? " · " + esc(expLine()) : ""), "xlsx")}${EXP_OK ? (H.exp ? row("x", "var(--mute)", "Automatischen Export beenden", esc(H.exp.name) + " bleibt, wie sie ist", "expoff") : row("sync", "var(--ok)", "Automatisch exportieren", "Einmal Speicherort wählen, danach nach jeder Änderung", "exppick")) : ""}${row("cal", "var(--accent-ink)", "Kalender (.ics)", "Ab heute, inklusive Anpassungen", "ics")}${row("up", "var(--mute)", "Sicherung speichern", "Kompletter Stand als Datei", "sharejson")}${row("down", "var(--mute)", "Sicherung laden", "Führt mit dem Stand hier zusammen", "loadjson")}</div>`;
+  x += `<div class="sec"><h2>Hilfe</h2></div><div class="grp">${row("book", "var(--ink2)", "Wie die App anpasst", "Regeln und Quellen", "rules")}${row("trash", "var(--bad)", "Alle Daten löschen", "Nur auf diesem Gerät", "reset")}</div>`;
   x += `<p class="note" style="display:flex;gap:8px;margin-top:16px">${ui("shield")}<span>Plan und Einträge liegen nur auf deinen Geräten und in der Sync-Datei, die du selbst wählst. Die App sendet nichts an Server. Empfehlungen folgen festen Trainingsregeln und ersetzen keine ärztliche Abklärung.</span></p>`;
   return x;
 }
@@ -1055,70 +1082,45 @@ function sickSheet(D) {
     x += `<div class="field"><div class="fl"><span>Trifft etwas davon zu?</span><b>Warnzeichen</b></div><div class="chips">${fl.map(k => chipT("flags", k, E.FLAGS[k], F.flags.includes(k))).join("")}</div></div>`;
     if (F.flags.length || F.cat === "infekt") x += `<div class="banner err" style="margin-top:10px">${ui("heart")}<div class="tx">${F.flags.length ? "<b>Bitte ärztlich abklären,</b> bevor du wieder trainierst." : "<b>Mit Fieber nicht trainieren.</b>"} Bei Brustschmerz, Herzstolpern oder Atemnot sofort ärztliche Hilfe. Die App stellt keine Diagnose.</div></div>`;
   }
-  x += `<p class="note" style="display:flex;gap:8px">${ui("shield")}<span>Diese Angaben bleiben auf dem Gerät und in deiner Sicherungsdatei. Sie gehen nicht ins Excel-Protokoll.</span></p>`;
+  x += `<p class="note" style="display:flex;gap:8px">${ui("shield")}<span>Diese Angaben bleiben auf dem Gerät und in deiner Sicherungsdatei. Sie gehen nicht in den Export.</span></p>`;
   x += `<div class="sh-foot"><button class="btn" data-act="close">Abbrechen</button><button class="btn pri" data-act="savesick" ${F.cat && (F.cat !== "verletzung" || F.region) ? "" : "disabled"}>${ui("check")}${F.edit ? "Speichern" : "Melden"}</button></div>`;
   return x;
 }
 
 /* ---------- Willkommen ---------- */
 function vWelcome() {
-  return `<main class="welcome"><img class="logo tiger" src="triger.svg" alt=""><h1>Triger</h1><p class="lead">Stark in drei Disziplinen. Dein Plan bis Linz und ins Allgäu: abhaken mit einem Tipp, und verpasst du etwas, plant Triger neu.</p>
+  return `<main class="welcome"><img class="logo" src="gehhilfe.svg" alt=""><h1>Gehhilfe</h1><p class="lead">Deine Stütze bis Linz und ins Allgäu. Abhaken mit einem Tipp, Training in eigenen Worten notieren, und verpasst du etwas, plant die App neu.</p>
    ${ALERT ? `<div class="banner err">${ui("info")}<div class="tx">${esc(ALERT)}</div></div>` : ""}
-   <div class="steps"><div><b>1</b><span>Trainingsplan (Excel) laden</span></div><div><b>2</b><span>Unter Profil eine Sync-Datei in iCloud Drive anlegen</span></div><div><b>3</b><span>Auf dem iPhone dieselbe Sync-Datei laden</span></div></div>
-   <div class="acts"><button class="btn pri wide" data-act="loadxlsx">Trainingsplan laden</button><button class="btn wide" data-act="loadjson">Sync-Datei oder Sicherung laden</button>${FSA ? '<button class="btn ghost wide" data-act="syncopen">Sync-Datei verbinden</button>' : ""}</div>
-   <p class="fine">${ui("shield")}<span>Deine Daten bleiben auf dem Gerät. Die App sendet nichts an Server.</span></p></main>`;
+   <div class="steps"><div><b>1</b><span>Sync-Datei aus iCloud Drive laden. Beim allerersten Mal die Startdatei <i>Gehhilfe-Startplan.json</i>.</span></div><div><b>2</b><span>Auf dem zweiten Gerät dieselbe Sync-Datei laden.</span></div></div>
+   <div class="acts">${FSA ? '<button class="btn pri wide" data-act="syncopen">Sync-Datei verbinden</button><button class="btn wide" data-act="loadjson">Sicherung oder Startdatei laden</button>' : '<button class="btn pri wide" data-act="loadjson">Sync-Datei oder Startdatei laden</button>'}</div>
+   <p class="fine">${ui("shield")}<span>Deine Daten bleiben auf deinen Geräten. Die App sendet nichts an Server.</span></p></main>`;
 }
-/* ---------- Import, Sync, Export ---------- */
-/* v3.3: Excel direkt verbinden (Chrome/Edge am Mac). Die App schreibt nach Änderungen selbst in die Datei im Ordner. */
-const XL_OK = typeof window !== "undefined" && "showOpenFilePicker" in window;
-let xlTimer = null;
-function scheduleXl() { if (!H.xl) return; clearTimeout(xlTimer); xlTimer = setTimeout(() => xlWrite(false), 4000); }
-async function xlPick() {
-  try { const [h] = await showOpenFilePicker({ types: [{ description: "Trainingsplan", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }] });
-    if ((await h.requestPermission({ mode: "readwrite" })) !== "granted") return;
-    const buf = new Uint8Array(await (await h.getFile()).arrayBuffer()); const nb = E.parseWorkbook(XLSX, buf);
-    if (!nb.plan || !nb.plan.length) throw new Error("In der Datei steht kein Trainingsplan.");
-    H.xl = h; await idbPut("xlHandle", h); await xlWrite(true); render();
-  } catch (e) { if (e.name !== "AbortError") { ALERT = "Excel nicht verbunden: " + e.message; render(); } }
+/* ---------- Sync und Export ---------- */
+/* 4.0: Keine Excel mehr als Quelle. Automatischer Export (Chrome/Edge am Mac): einmal Speicherort wählen, danach schreibt die App nach Änderungen selbst. */
+const EXP_OK = typeof window !== "undefined" && "showSaveFilePicker" in window;
+const EXPNAME = "Gehhilfe-Export.xlsx", XMIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+let expTimer = null;
+function scheduleExp() { if (!H.exp) return; clearTimeout(expTimer); expTimer = setTimeout(() => expWrite(false), 4000); }
+async function expPick() {
+  try { const h = await showSaveFilePicker({ suggestedName: EXPNAME, types: [{ description: "Excel", accept: { [XMIME]: [".xlsx"] } }] });
+    H.exp = h; await idbPut("expHandle", h); await expWrite(true); render();
+  } catch (e) { if (e.name !== "AbortError") { ALERT = "Export nicht eingerichtet: " + e.message; render(); } }
 }
-async function xlWrite(interactive) {
-  const h = H.xl; if (!h || !B) return false;
+async function expWrite(interactive) {
+  const h = H.exp; if (!h || !B) return false;
   try {
     let p = await h.queryPermission({ mode: "readwrite" });
-    if (p !== "granted") { if (!interactive) { H.xlState = "wait"; paintChrome(); return false; } p = await h.requestPermission({ mode: "readwrite" }); if (p !== "granted") { H.xlState = "wait"; paintChrome(); return false; } }
-    const src = new Uint8Array(await (await h.getFile()).arrayBuffer());
-    const r = await E.writeBack(XLSX, src, B, ST, today());
-    const w = await h.createWritable(); await w.write(r.bytes); await w.close();
-    H.xlAt = Date.now(); H.xlState = "ok"; idbPut("xlLast", H.xlAt); idbPut("srcxlsx", { bytes: r.bytes, at: H.xlAt });
-    if (interactive) toast("In " + h.name + " gespeichert", { icon: "check" });
-    paintChrome(); return true;
-  } catch (e) { H.xlState = "err"; paintChrome(); if (interactive) { ALERT = "Excel nicht geschrieben: " + (/lock|busy|NoModification|InvalidState/i.test(e.name + e.message) ? "Die Datei ist gerade in Excel geöffnet. Schließen und erneut tippen." : e.message); render(); } console.warn(e); return false; }
+    if (p !== "granted") { if (!interactive) { H.expState = "wait"; return false; } p = await h.requestPermission({ mode: "readwrite" }); if (p !== "granted") { H.expState = "wait"; return false; } }
+    const w = await h.createWritable(); await w.write(buildExport()); await w.close();
+    H.expAt = Date.now(); H.expState = "ok"; idbPut("expLast", H.expAt);
+    if (interactive) toast("Exportiert nach " + h.name, { icon: "check" });
+    return true;
+  } catch (e) { H.expState = "err"; if (interactive) { ALERT = "Export nicht geschrieben: " + (/lock|busy|NoModification|InvalidState/i.test(e.name + e.message) ? "Die Datei ist gerade in Excel geöffnet. Schließen und erneut tippen." : e.message); render(); } console.warn(e); return false; }
 }
-function xlLine() { if (!H.xl) return ""; const at = H.xlAt ? new Date(H.xlAt).toLocaleString("de-DE", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "noch nie"; return H.xlState === "wait" ? "Einmal tippen zum Freigeben" : H.xlState === "err" ? "Letzter Versuch fehlgeschlagen, tippen zum Wiederholen" : "Automatisch gespeichert · " + at; }
-async function writeBackNow(buf) {
-  if (H.xl && !buf) { await xlWrite(true); return; }
-  try {
-    const src = buf || ((await idbGet("srcxlsx")) || {}).bytes;
-    if (!src) { WB_PENDING = true; $("#fx").click(); toast("Bitte einmal die aktuelle Trainingsplan-Excel wählen, die App schreibt dann hinein."); return; }
-    const r = await E.writeBack(XLSX, new Uint8Array(src), B, ST, today());
-    await shareFile("Trainingsplan_2026-2027.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", r.bytes);
-    put("set:lastwb", { at: Date.now(), stat: r.stat }); render();
-    toast("Excel geschrieben: " + r.stat.status + " Status, " + r.stat.changed + " Anpassungen, " + r.stat.moved + " Verschiebungen. Alte Datei ersetzen.", { icon: "check" });
-  } catch (e) { ALERT = "Zurückschreiben nicht möglich: " + e.message; render(); }
-}
-let WB_PENDING = false;
+function expLine() { if (!H.exp) return ""; const at = H.expAt ? new Date(H.expAt).toLocaleString("de-DE", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "noch nie"; return H.expState === "wait" ? "einmal tippen zum Freigeben" : H.expState === "err" ? "letzter Versuch fehlgeschlagen" : "automatisch, zuletzt " + at; }
 
-function importXlsx(buf) {
-  const nb = E.parseWorkbook(XLSX, buf), first = !B;
-  idbPut("srcxlsx", { bytes: buf, at: Date.now() }); /* Original für das Zurückschreiben, nur lokal */
-  /* Verschiebungen aus der Excel nur übernehmen, wenn die App diese Einheit nicht schon selbst verschoben oder geändert hat. */
-  const touched = new Set(); Object.keys(ST).filter(k => k.startsWith("adj:")).forEach(k => { const a = ST[k].v; if (a && !a.undone) (a.ops || []).forEach(o => touched.add(o.type === "add" ? String(o.s.id).split("~")[0] : o.id)); });
-  for (const k in nb.seed) { if (ST[k]) continue; if (k.startsWith("adj:xl-") && touched.has(k.slice(7))) continue; if (k.startsWith("log:") && k.includes("~") && touched.has(k.slice(4).split("~")[0])) continue; ST[k] = { v: nb.seed[k], t: 1 }; }
-  delete nb.seed; B = nb; MEMO.k = null; idbPut("base", B); saveState();
-  toast(first ? "Plan geladen: " + B.plan.length + " Einheiten" : "Plan aktualisiert. Deine Einträge bleiben.", { icon: "check" }); ALERT = ""; render();
-}
 function ingest(obj) {
-  if (!obj || obj.app !== "perflab") throw new Error("Das ist keine Performance-Lab-Datei.");
+  if (!obj || obj.app !== "perflab") throw new Error("Das ist keine Datei dieser App (Sync, Sicherung oder Startdatei).");
   if (obj.v && obj.v > 2) throw new Error("Datei stammt aus einer neueren App-Version. Bitte App aktualisieren.");
   let changed = false;
   if (obj.base && (!B || (obj.base.importedAt || 0) > (B.importedAt || 0))) { B = obj.base; idbPut("base", B); changed = true; }
@@ -1140,7 +1142,7 @@ async function syncNow(interactive) {
   } catch (e) { syncState = "err"; syncMsg = "Datei verschoben oder iCloud nicht erreichbar"; paintChrome(); console.warn(e); }
 }
 async function syncPick(create) {
-  try { const types = [{ description: "Triger Sync", accept: { "application/json": [".json"] } }];
+  try { const types = [{ description: "Gehhilfe Sync", accept: { "application/json": [".json"] } }];
     const h = create ? await showSaveFilePicker({ suggestedName: SYNCNAME, types }) : (await showOpenFilePicker({ types }))[0];
     H.sync = h; await idbPut("syncHandle", h); await syncNow(true); render(); toast("Sync aktiv: " + h.name, { icon: "sync" });
   } catch (e) { if (e.name !== "AbortError") { ALERT = "Sync-Datei nicht nutzbar: " + e.message + ". Sperrt Chrome iCloud Drive, nimm den Ordner Dokumente (mit iCloud-Abgleich)."; render(); } }
@@ -1156,23 +1158,33 @@ function privAdj(a) {
   return { title: a.title, why: a.why, lines: a.lines || [] };
 }
 const privAdjIds = () => new Set(Object.keys(ST).filter(k => k.startsWith("adj:")).map(k => ST[k].v).filter(a => a && /^sick/.test(a.key || "")).map(a => a.id));
-function exportXlsx() {
-  const c = C(), t = c.t, wb = XLSX.utils.book_new(), PV = privAdjIds();
-  const rows = [["Woche", "Datum", "Zeit", "Prio", "Sport", "Einheit", "Soll km", "Soll min", "Status", "Grund", "Ist km", "Ist min", "Pace/Tempo", "Ø HF", "Max HF", "RPE", "Gefühl", "Hm", "Schuh", "Notiz", "Anpassung"]];
-  c.Ex.filter(s => s.sport !== "Ruhe").forEach(s => { const l = log(s), a = E.actual(ST, s, t);
-    rows.push([s.w, U.wdD(s.date) + U.sd(s.date).getUTCFullYear(), s.time, s.prio, s.sport, PV.has(s.adj) ? "Angepasste Einheit" : s.name, s.km || "", s.min || "", s.dropped ? "entfällt" : E.statusOf(ST, s, t), l.why || "", a.km ? Math.round(a.km * 100) / 100 : "", a.min ? Math.round(a.min) : "", a.km && a.min ? (s.sport === "Rad" ? de(a.km / (a.min / 60)) + " km/h" : s.sport === "Lauf" ? E.paceStr(a.min, a.km) + " /km" : "") : "", l.hf ?? "", l.hfmax ?? "", l.rpe ?? "", l.feel ?? "", l.hm ?? "", l.shoe || "", l.note || "", s.dropped || s.edited || s.added ? (PV.has(s.adj) ? "angepasst" : (s.note || "angepasst")) : ""]); });
-  c.free.forEach(f => rows.push([E.weekOf(B, f.date), U.wdD(f.date) + U.sd(f.date).getUTCFullYear(), "", "frei", f.sport, f.name || "Freies Training", "", "", "✓", "", f.dist ?? "", f.dur ?? "", "", f.hf ?? "", "", f.rpe ?? "", "", f.hm ?? "", "", f.note || "", "frei"]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Protokoll");
-  const tr = [["Datum", "Test", "Zeit", "Ø HF", "VDOT", "Wirkung"]]; B.tests.forEach(T => { const r = get("test:" + T.key) || {}, km = { "10K": 10, HM: 21.0975, M: 42.195 }[T.typ]; tr.push([U.wdD(testDate(T)), T.name, num(r.time) ? U.hms(r.time) : "", r.hf ?? "", km && num(r.time) ? Math.round(E.vdot(km, r.time * 1440) * 10) / 10 : "", testEffect(T)]); });
-  tr.push([], ["Schwellenpuls Laufen", Math.round(c.R.lthr)], ["Referenz-HM", U.hms(c.R.refHM)], ["Marathon-Prognose", U.hms(c.R.prog)], ["CSS /100 m", num(c.R.css) ? U.mss(c.R.css) : ""]);
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tr), "Tests");
+/* 4.0: Export als Excel. Enthält alles, was das Wochen-Review braucht, inklusive Einheiten-ID. Keine Krankheitsdetails, keine Reiseorte. */
+function buildExport() {
+  const c = C(), t = c.t, wb = XLSX.utils.book_new(), PV = privAdjIds(), D = d => U.wdD(d) + U.sd(d).getUTCFullYear();
+  const info = [["Gehhilfe: Export", ""], ["Exportiert am", new Date().toLocaleString("de-DE")], ["Stand heute", D(t)], ["Woche", c.cw + " von " + c.NW], ["Schwellenpuls Laufen", Math.round(c.R.lthr)], ["Referenz-HM", U.hms(c.R.refHM)], ["Marathon-Prognose", U.hms(c.R.prog)], ["CSS /100 m", num(c.R.css) ? U.mss(c.R.css) : ""], [], ["Hinweis", "Datum als TT.MM.JJJJ, ID = Excel-Serienzahl-Sport-Nummer, wie in der App."]];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(info), "Info");
+  const rows = [["ID", "Woche", "Datum", "Zeit", "Prio", "Sport", "Einheit", "Soll km", "Soll min", "Status", "Grund", "Ist km", "Ist min", "Pace/Tempo", "Ø HF", "Max HF", "RPE", "Gefühl 1–5", "Hm", "Schmerz", "Erholung", "Struktur", "Notiz", "Anpassung"]];
+  const pace = (s, a) => a.km && a.min ? (s.sport === "Rad" ? de(a.km / (a.min / 60)) + " km/h" : s.sport === "Lauf" ? E.paceStr(a.min, a.km) + " /km" : s.sport === "Schwimmen" ? U.mss(a.min / (a.km * 10) / 1440) + " /100 m" : "") : "";
+  c.Ex.filter(s => s.sport !== "Ruhe").forEach(s => { const l = log(s), a = E.actual(ST, s, t), st = s.dropped ? "entfällt" : E.statusOf(ST, s, t), done = st === "✓" || st === "½";
+    rows.push([s.id, s.w, D(s.date), s.time, s.prio, s.sport, PV.has(s.adj) ? "Angepasste Einheit" : s.name, s.km || "", s.min || "", st, l.why || "", done && a.km ? Math.round(a.km * 100) / 100 : "", done && a.min ? Math.round(a.min) : "", done ? pace(s, a) : "", l.hf ?? "", l.hfmax ?? "", l.rpe ?? "", l.feel ?? "", l.hm ?? "", l.pain == null ? "" : l.pain === 0 ? "keine" : (l.painTxt || "ja"), (l.tags || []).join(", "), E.segText(l.segs, s.sport), l.note || "", s.dropped || s.edited || s.added ? (PV.has(s.adj) ? "angepasst" : (s.note || "angepasst")) : ""]); });
+  c.free.forEach(f => rows.push(["free:" + f.id, E.weekOf(B, f.date), D(f.date), "", "frei", f.sport, f.name || "Freies Training", "", "", "✓", "", f.dist ?? "", f.dur ?? "", "", f.hf ?? "", "", f.rpe ?? "", f.feel ?? "", f.hm ?? "", f.pain == null ? "" : f.pain === 0 ? "keine" : (f.painTxt || "ja"), (f.tags || []).join(", "), E.segText(f.segs, f.sport), f.note || "", "frei"]));
+  const ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = [14, 6, 11, 12, 5, 10, 34, 8, 8, 8, 10, 8, 8, 12, 6, 6, 5, 8, 6, 10, 18, 30, 40, 30].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, ws, "Plan");
   const ck = [["Woche", "Ruhepuls", B.painLabel, "Gefühl 1–5", "Soll h", "Ist h", "Schlüssel", "Fitness", "Ermüdung", "Form"]];
   c.WS.weeks.forEach(w => { const k = get("chk:" + w.w) || {}, f = c.F.find(p => p.d === w.start + 6) || {}; ck.push([w.w, k.puls ?? "", k.pain ?? "", k.feel ?? "", Math.round(w.so / 6) / 10, Math.round(w.is / 6) / 10, w.keyDone + "/" + w.keyTot, num(f.ctl) ? Math.round(f.ctl) : "", num(f.atl) ? Math.round(f.atl) : "", num(f.tsb) ? Math.round(f.tsb) : ""]); });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ck), "Wochen");
-  const vo = [["Datum", "VO2max Garmin"]]; E.vo2List(ST).forEach(v => vo.push([U.wdD(v.date) + U.sd(v.date).getUTCFullYear(), v.v])); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vo), "VO2max");
-  const ad = [["Datum", "Anpassung", "Begründung", "Änderungen", "Status"]]; Object.keys(ST).filter(k => k.startsWith("adj:")).map(k => ST[k].v).filter(Boolean).sort((a, b) => a.created - b.created).forEach(a => { const pv = privAdj(a); ad.push([new Date(a.created).toLocaleDateString("de-DE"), pv.title, pv.why, pv.lines.join(" | "), a.undone ? "zurückgenommen" : "aktiv"]); });
+  const tr = [["Datum", "Test", "Zeit", "Ø HF", "VDOT", "Wirkung"]]; B.tests.forEach(T => { const r = get("test:" + T.key) || {}, km = { "10K": 10, HM: 21.0975, M: 42.195 }[T.typ]; tr.push([D(testDate(T)), T.name, num(r.time) ? U.hms(r.time) : "", r.hf ?? "", km && num(r.time) ? Math.round(E.vdot(km, r.time * 1440) * 10) / 10 : "", testEffect(T)]); });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tr), "Tests");
+  const tb = [["Datum", "Schlaf h", "Schlafqualität 1–5", "Gefühl 1–5", "Ruhepuls", "Muskelkater 0–3", "Gewicht kg", "Frühstück", "Mittagessen", "Abendessen", "Snacks", "Notiz"]].concat(E.diaryRows(ST).map(r => [D(r[0])].concat(r.slice(1).map(v => v ?? ""))));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tb), "Tagebuch");
+  const vo = [["Datum", "VO2max Garmin"]]; E.vo2List(ST).forEach(v => vo.push([D(v.date), v.v])); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vo), "VO2max");
+  const ad = [["Datum", "Anpassung", "Begründung", "Änderungen", "Status"]]; Object.keys(ST).filter(k => k.startsWith("adj:")).map(k => ST[k].v).filter(Boolean).sort((a, b) => a.created - b.created).forEach(a => { const pv = privAdj(a); ad.push([a.created > 1 ? new Date(a.created).toLocaleDateString("de-DE") : "", pv.title, pv.why, pv.lines.join(" | "), a.undone ? "zurückgenommen" : "aktiv"]); });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ad), "Anpassungen");
-  shareFile("Trainingsprotokoll_" + new Date().toISOString().slice(0, 10) + ".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", XLSX.write(wb, { type: "array", bookType: "xlsx" }));
+  return new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
+}
+function exportXlsx() {
+  if (H.exp) { expWrite(true); return; }
+  shareFile(EXPNAME, XMIME, buildExport()).then(() => toast("Export erstellt: " + EXPNAME, { icon: "check" }));
 }
 
 /* ---------- Render ---------- */
@@ -1198,7 +1210,7 @@ function doRender() {
   const body = tab === "heute" ? vHeute(c) : tab === "plan" ? vPlan(c) : tab === "daten" ? vData(c) : tab === "fort" ? vProg(c) : vProf(c);
   const nx = B.S.events.filter(e => e.date >= c.t).sort((a, b) => a.date - b.date)[0];
   const rail = PREF.side === "rail", inspOff = PREF.insp === false;
-  const side = `<aside class="side" aria-label="Navigation"><div class="brand"><img src="triger.svg" alt=""><span>Triger</span><button class="sidetog" data-act="sidetog" aria-label="${rail ? "Seitenleiste einblenden" : "Seitenleiste einklappen"}" title="Seitenleiste">${ui("sidebar")}</button></div><nav>${TABS.map(([k, l, ic]) => `<button data-tab="${k}" aria-current="${tab === k ? "page" : "false"}" title="${l}">${ui(ic)}<span class="nl">${l}</span>${k === "heute" && n ? `<span class="dot">${n}</span>` : ""}</button>`).join("")}</nav>
+  const side = `<aside class="side" aria-label="Navigation"><div class="brand"><img src="gehhilfe-mark.svg" alt=""><span>Gehhilfe</span><button class="sidetog" data-act="sidetog" aria-label="${rail ? "Seitenleiste einblenden" : "Seitenleiste einklappen"}" title="Seitenleiste">${ui("sidebar")}</button></div><nav>${TABS.map(([k, l, ic]) => `<button data-tab="${k}" aria-current="${tab === k ? "page" : "false"}" title="${l}">${ui(ic)}<span class="nl">${l}</span>${k === "heute" && n ? `<span class="dot">${n}</span>` : ""}</button>`).join("")}</nav>
     <button class="btn pri sm addbtn" data-act="free" title="Training hinzufügen">${ui("plus")}<span class="nl">Training hinzufügen</span></button><div class="foot">${nx ? `<div class="cdmini"><b class="num">${nx.date - c.t}</b><span>Tage bis ${esc(nx.name)}</span></div>` : ""}${syncPill()}</div></aside>`;
   if (!wide) { for (let k = SHEETS.length - 1; k >= 0; k--) if (SHEETS[k].side) SHEETS.splice(k, 1); }
   if (wide && inspOff && SHEETS.some(S => S.side)) PREF.insp = true;
@@ -1223,8 +1235,7 @@ function inspHTML(c) {
 function paintInsp() { const i = $("#insp"); if (!i || !B) return; i.innerHTML = inspHTML(C()); $$(".content .row.sel").forEach(r => r.classList.remove("sel")); if (selId && !SHEETS.some(S => S.side)) $$(`.content [data-act=sess][data-id="${CSS.escape(selId)}"]`).forEach(r => r.classList.add("sel")); if (typeof bindSwipes === "function") bindSwipes(); }
 function paintChrome() { $$(".syncpill").forEach(el => { el.outerHTML = syncPill(); }); }
 let INSP = {};
-function applyTheme() { const r = document.documentElement; if (PREF.theme === "system") r.removeAttribute("data-theme"); else r.setAttribute("data-theme", PREF.theme);
-  const dark = PREF.theme === "dark" || (PREF.theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches); const m = $('meta[name=theme-color]'); if (m) m.content = dark ? "#0A0F17" : "#EDF1F6"; }
+function applyTheme() { /* 4.0: nur hell (Wunsch Felix) */ document.documentElement.setAttribute("data-theme", "light"); }
 
 /* ---------- Sheets öffnen ---------- */
 function openSess(id, mode) {
@@ -1309,7 +1320,7 @@ function stepField(F, f, delta, sport) {
 }
 function syncInputs(F, sport) {
   $$("[data-in]", ($(".sheet-wrap:last-child .sheet") || $("#insp") || document)).forEach(el => {
-    const f = el.dataset.in; if (!(f in F)) return;
+    const f = el.dataset.in; if (!(f in F) || el === document.activeElement || f === "note") return;
     el.value = f === "dur" ? fmtDurIn(F.dur) : f === "dist" ? fmtDistIn(F.dist, sport) : f === "date" || f === "from" || f === "to" ? dateVal(F[f]) : (F[f] ?? "");
   });
   const dv = $("#derived", ($(".sheet-wrap:last-child .sheet") || $("#insp") || document)); if (dv) dv.innerHTML = derivedTxt(F, sport);
@@ -1326,10 +1337,11 @@ document.addEventListener("click", async e => {
     case "close": if (SHEETS.length) closeSheet(); else if (!WIDE()) { selId = null; render(); } else { INSP = { mode: "" }; paintInsp(); } break;
     case "mode": { const f = cf(); if (!f) break; f.D.mode = v; f.D.f = null; f.D.why = null; f.re(); break; }
     case "setf": { const f = cf(); if (!f) break; const F = f.D.f, raw = v; const nv = ["st", "sport"].includes(b.dataset.f) ? raw : Number(raw);
+      if (b.dataset.f !== "more") (F.touch = F.touch || {})[b.dataset.f] = 1;
       if (b.dataset.f === "more") F.more = !!nv; else F[b.dataset.f] = F[b.dataset.f] === nv && !["st", "sport"].includes(b.dataset.f) ? null : nv; buzz(4); f.re(); break; }
-    case "step": { const f = cf(); if (!f) break; const F = f.D.f, s = formS(f), sport = s ? s.sport : F.sport; stepField(F, b.dataset.f, Number(v), sport); buzz(3); syncInputs(F, sport); break; }
+    case "step": { const f = cf(); if (!f) break; const F = f.D.f, s = formS(f), sport = s ? s.sport : F.sport; (F.touch = F.touch || {})[b.dataset.f] = 1; stepField(F, b.dataset.f, Number(v), sport); buzz(3); syncInputs(F, sport); break; }
     case "savelog": { const f = cf(); if (!f) break; const s = findS(id), F = f.D.f; const before = Object.assign({}, C().WS.weeks[s.w - 1]);
-      setLog(id, { st: F.st, dur: F.dur, dist: ["Lauf", "Rad", "Schwimmen", "Triathlon"].includes(s.sport) ? (s.sport === "Schwimmen" && num(F.dist) && F.dist > 20 ? F.dist / 1000 : F.dist) : null, hf: F.hf, hfmax: F.hfmax, rpe: F.rpe, feel: F.feel, shoe: F.shoe, hm: F.hm, pull: F.pull, note: F.note, why: undefined, ikm: undefined, imin: undefined });
+      setLog(id, Object.assign({ st: F.st, dur: F.dur, dist: ["Lauf", "Rad", "Schwimmen", "Triathlon"].includes(s.sport) ? (s.sport === "Schwimmen" && num(F.dist) && F.dist > 20 ? F.dist / 1000 : F.dist) : null, hf: F.hf, hfmax: F.hfmax, rpe: F.rpe, feel: F.feel, shoe: F.shoe, hm: F.hm, pull: F.pull, note: F.note, why: undefined, ikm: undefined, imin: undefined }, noteExtra(Object.assign({ sport: s.sport }, F))));
       buzz(15); if (f.S) closeSheet(f.S, true); else { INSP = {}; } render(); const m = milestone(s, before); toast(m || "Gespeichert. Stark.", { icon: "check", cele: !!m }); break; }
     case "why": { const f = cf(); const s = findS(id); setLog(id, { st: "✗", why: v });
       if (v === "krank") { const sk = get("sick"); if (!(sk && num(sk.from) && !num(sk.to))) put("sick", { from: s ? s.date : t, to: null }); }
@@ -1350,7 +1362,7 @@ document.addEventListener("click", async e => {
     case "freeedit": { const f = get(id); closeSheet(); openSheet(S => freeForm(S.data), { label: "Training bearbeiten", data: { edit: id, f: Object.assign({}, f) } }); break; }
     case "freedel": { const f = get(id); set(id, Object.assign({}, f, { del: true })); closeSheet(); selId = null; render(); toast("Gelöscht", { undo: () => set(id, f) }); break; }
     case "savefree": { const S = SHEETS[SHEETS.length - 1], F = S.data.f; if (!num(F.dur) || F.dur <= 0) { toast("Bitte eine Dauer eintragen."); break; }
-      const key = S.data.edit || "free:" + newId(); set(key, { date: F.date, sport: F.sport, dur: F.dur, dist: F.dist, hf: F.hf, rpe: F.rpe, hm: F.hm, name: F.name, note: F.note }); closeSheet(S, true); buzz(15); toast((F.name || sp(F.sport).lab) + " gespeichert", { icon: "check" }); break; }
+      const key = S.data.edit || "free:" + newId(); set(key, Object.assign({ date: F.date, sport: F.sport, dur: F.dur, dist: F.dist, hf: F.hf, rpe: F.rpe, hm: F.hm, name: F.name, note: F.note, feel: F.feel }, noteExtra(F))); closeSheet(S, true); buzz(15); toast((F.name || sp(F.sport).lab) + " gespeichert", { icon: "check" }); break; }
     case "checkin": openSheet(S => checkinForm(S.data), { label: "Check-in", data: { w: +(b.dataset.w || C().cw) } }); break;
     case "savechk": { const S = SHEETS[SHEETS.length - 1], F = S.data.f, w = S.data.w, last = E.vo2List(ST).slice(-1)[0];
       put("chk:" + w, { puls: F.puls, pain: F.pain, feel: F.feel });
@@ -1425,10 +1437,8 @@ document.addEventListener("click", async e => {
     case "dsh": { const S = SHEETS[SHEETS.length - 1]; if (S) { S.data.d = +v; rerenderSheet(S); } break; }
     case "mday2w": { closeSheet(SHEETS[SHEETS.length - 1], true); planZoom = "woche"; planWeek = Math.max(1, Math.min(C().NW, E.weekOf(B, +v))); render(); break; }
     case "range": progRange = v; render(); break;
-    case "theme": PREF.theme = v; idbPut("pref", PREF); render(); break;
     case "alertx": ALERT = ""; render(); break;
     case "synctap": if (H.sync) syncNow(true); else { tab = "prof"; render(); } break;
-    case "loadxlsx": $("#fx").click(); break;
     case "loadjson": $("#fj").click(); break;
     case "sharejson": if (B) await shareFile(SYNCNAME, "application/json", payload()); break;
     case "synccreate": syncPick(true); break;
@@ -1437,23 +1447,24 @@ document.addEventListener("click", async e => {
     case "syncoff": H.sync = null; idbDel("syncHandle"); syncState = "off"; syncMsg = "Nur auf diesem Gerät"; render(); break;
     case "ics": await shareFile("Training.ics", "text/calendar", E.ics(B, ST, t)); break;
     case "xlsx": exportXlsx(); break;
-    case "wb": writeBackNow(); break;
-    case "xlpick": xlPick(); break;
+    case "exppick": expPick(); break;
     case "fold": toggleFold(v); break;
     case "sidetog": PREF.side = PREF.side === "rail" ? "full" : "rail"; idbPut("pref", PREF); doRender(); break;
     case "insptog": PREF.insp = PREF.insp === false; idbPut("pref", PREF); doRender(); break;
-    case "xloff": H.xl = null; H.xlState = "off"; await idbDel("xlHandle"); render(); toast("Excel-Verbindung getrennt."); break;
-    case "reset": if (confirm("Alle Daten in dieser App löschen? Die Sync-Datei bleibt erhalten.")) { await idbDel("base"); await idbDel("state"); await idbDel("srcxlsx"); await idbDel("syncHandle"); await idbDel("xlHandle"); H.xl = null; B = null; ST = {}; H.sync = null; MEMO.k = null; render(); } break;
+    case "expoff": H.exp = null; H.expState = "off"; await idbDel("expHandle"); render(); toast("Automatischer Export beendet."); break;
+    case "reset": if (confirm("Alle Daten in dieser App löschen? Die Sync-Datei bleibt erhalten.")) { await idbDel("base"); await idbDel("state"); await idbDel("syncHandle"); await idbDel("expHandle"); H.exp = null; B = null; ST = {}; H.sync = null; MEMO.k = null; render(); } break;
     case "upd": navigator.serviceWorker.getRegistration().then(r => { if (r && r.waiting) r.waiting.postMessage("skip"); setTimeout(() => location.reload(), 300); }); break;
   }
 });
 document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("[role=button]")) { e.preventDefault(); e.target.click(); } });
 document.addEventListener("focusin", e => { if (e.target.matches("input,textarea,select") && !e.target.closest(".sheet") && !e.target.closest("#insp")) typing = true; });
 document.addEventListener("focusout", () => setTimeout(() => { typing = false; if (dirty) doRender(); }, 80));
+let noteT = null;
 document.addEventListener("input", e => {
   const el = e.target, f = el.dataset.in; if (!f) return; const cur = curForm(); if (!cur || !cur.D.f) return;
   const s = formS(cur), sport = s ? s.sport : cur.D.f.sport;
-  if (["dur", "dist", "hf", "hfmax", "hm", "puls", "vo2", "v", "kg", "wt"].includes(f)) { cur.D.f[f] = readField(f, el.value, sport); if (f === "vo2") cur.D.f.vo2touched = true; const dv = $("#derived", el.closest(".sheet") || el.closest("#insp") || document); if (dv) dv.innerHTML = derivedTxt(cur.D.f, sport); }
+  if (f === "note" && el.closest(".notef")) { cur.D.f.note = el.value; clearTimeout(noteT); noteT = setTimeout(() => applyNote(cur), 220); return; }
+  if (["dur", "dist", "hf", "hfmax", "hm", "puls", "vo2", "v", "kg", "wt"].includes(f)) { cur.D.f[f] = readField(f, el.value, sport); (cur.D.f.touch = cur.D.f.touch || {})[f] = 1; if (f === "vo2") cur.D.f.vo2touched = true; const dv = $("#derived", el.closest(".sheet") || el.closest("#insp") || document); if (dv) dv.innerHTML = derivedTxt(cur.D.f, sport); }
   else if (["note", "name", "shoe", "place", "airesp", "aikey", "aimodel"].includes(f)) { if (!cur.D.f) cur.D.f = {}; cur.D.f[f] = el.value; }
   else if (f.startsWith("fd_")) { if (!cur.D.f) cur.D.f = {}; cur.D.f[f.slice(3)] = el.value; }
   else if (["date", "from", "to"].includes(f)) cur.D.f[f] = fromDateVal(el.value);
@@ -1468,19 +1479,15 @@ document.addEventListener("change", e => {
     const S = SHEETS[SHEETS.length - 1]; if (S) { const T = B.tests.find(x => x.key === S.data.k), TT = T && (B.tests.find(x => x.typ === "CSS200" && x.date === T.date && T.typ === "CSS400") || T); const eff = TT ? (testEffect(TT) || testEffect(T)) : ""; $("#teff", S.el).innerHTML = eff ? `<div class="banner info" style="margin-top:12px">${ui("prog")}<div class="tx">${esc(eff)}</div></div>` : ""; }
     render(); if (num((get("test:" + k) || {}).time) || num((get("test:" + k) || {}).hf)) toast("Gespeichert. Paces und Zonen sind aktualisiert.", { icon: "check" }); }
 });
-$("#fx").addEventListener("change", async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const buf = new Uint8Array(await f.arrayBuffer());
-  if (WB_PENDING && B) { WB_PENDING = false; await idbPut("srcxlsx", { bytes: buf, at: Date.now() }); return writeBackNow(buf); }
-  try { importXlsx(buf); } catch (err) { ALERT = err.message; render(); } });
 $("#fc").addEventListener("change", async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const S = SHEETS[SHEETS.length - 1] || openSheet(SS => impSheet(SS.data), { label: "Import", data: {} });
   try { doImport(await f.text(), S); } catch (err) { toast(err.message.slice(0, 220)); } });
 $("#fj").addEventListener("change", async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return;
   try { ALERT = ""; const ch = ingest(JSON.parse(await f.text())); render(); toast(ch ? "Stand übernommen und zusammengeführt." : "Schon aktuell.", { icon: "check" }); } catch (err) { ALERT = "Datei nicht lesbar: " + err.message; render(); } });
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyTheme());
 let wasWide = WIDE(); addEventListener("resize", () => { if (WIDE() !== wasWide) { wasWide = WIDE(); render(); } });
 
 /* ---------- Start ---------- */
 (async () => {
-  try { B = (await idbGet("base")) || null; ST = (await idbGet("state")) || {}; PREF = Object.assign(PREF, (await idbGet("pref")) || {}); H.sync = (await idbGet("syncHandle")) || null; H.xl = (await idbGet("xlHandle")) || null; H.xlAt = (await idbGet("xlLast")) || 0; } catch (e) { console.warn(e); }
+  try { B = (await idbGet("base")) || null; ST = (await idbGet("state")) || {}; PREF = Object.assign(PREF, (await idbGet("pref")) || {}); H.sync = (await idbGet("syncHandle")) || null; H.exp = (await idbGet("expHandle")) || null; H.expAt = (await idbGet("expLast")) || 0; idbDel("xlHandle"); idbDel("srcxlsx"); /* 4.0: Excel-Altlasten entfernen */ } catch (e) { console.warn(e); }
   for (const k in ST) if (ST[k] && ST[k].v === null) delete ST[k];
   if (H.sync) { syncState = "wait"; syncMsg = "Einmal tippen zum Freigeben"; }
   doRender(); document.body.classList.add("ready");
@@ -1500,5 +1507,5 @@ let wasWide = WIDE(); addEventListener("resize", () => { if (WIDE() !== wasWide)
     }).catch(() => {});
   }
 })();
-window.__perflab = { get B() { return B; }, get ST() { return ST; }, importXlsx, ingest, render: doRender, C };
+window.__perflab = { get B() { return B; }, get ST() { return ST; }, ingest, buildExport, render: doRender, C };
 })();

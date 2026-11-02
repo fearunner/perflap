@@ -838,3 +838,11 @@ body{background:linear-gradient(180deg,var(--bg) 0,var(--bg) 60%,#F4FAFD 100%) f
 .splash img{width:120px;height:120px;border-radius:28px;box-shadow:0 18px 40px -16px rgba(7,45,89,.45);animation:spl 1.2s var(--ease) infinite alternate}
 @keyframes spl{from{transform:scale(.97)}to{transform:scale(1.02)}}
 @media (prefers-reduced-motion:reduce){.splash img{animation:none}}
+/* 4.3 Garmin */
+.gbtn.spin .ico{animation:gspin 1s linear infinite}@keyframes gspin{to{transform:rotate(360deg)}}
+.gstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:8px}
+.gs{background:var(--fill);border-radius:10px;padding:8px 10px;min-width:0}
+.gs span{display:block;font-size:.75rem;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gs b{display:block;font:700 1.0625rem/1.2 var(--num);font-variant-numeric:tabular-nums;white-space:nowrap}
+.gs small{display:block;font-size:.6875rem;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gs.warn{background:var(--warn-t)}.gs.warn small{color:var(--warn)}

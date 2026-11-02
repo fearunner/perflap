@@ -187,7 +187,8 @@ function lockerPatch(s, f, why) {
   f = f || .7;
   const km = s.km ? r1(s.km * f) : 0, min = r5((s.min || 30) * f);
   const P = { Lauf: { code: "E", name: "Lauf locker" }, Rad: { code: "R2", name: "Rad locker" }, Schwimmen: { code: "SW", name: "Schwimmen locker" }, Kraft: { code: "GYM", name: "Kraft leicht" }, Triathlon: { code: "E", name: "Locker" } }[s.sport] || { code: s.code, name: "Locker" };
-  return { name: P.name + " (statt " + s.name.replace(/^★\s*/, "") + ")", code: P.code, km, min, prio: s.prio === "A" ? "B" : s.prio, time: timeRange(tStart(s.time), min),
+  const orig = s.name.replace(/^★\s*/, "").replace(/^(Lauf|Rad|Schwimmen|Kraft) (locker|leicht) \(statt (.*)\)$/, "$3").replace(/\s*\(statt [^()]*\)\s*$/, "");
+  return { name: P.name + " (statt " + orig + ")", code: P.code, km, min, prio: s.prio === "A" ? "B" : s.prio, time: timeRange(tStart(s.time), min),
     desc: (why ? why + " " : "") + "Ursprünglich: " + s.name + ". Nur locker, HF unter dem Deckel.", test: "", typ: "", tkey: "" };
 }
 function cloneTo(s, d, start, tag) {
@@ -1146,12 +1147,13 @@ function diaryRows(st) {
 }
 function restBase(B, st, t) { const pts = []; for (let d = t - 28; d < t; d++) { const m = val(st, "mc:" + d); if (m && num(m.puls)) pts.push(m.puls); } if (pts.length >= 5) { pts.sort((a, b) => a - b); return pts[Math.floor(pts.length / 2)]; } return num(B.S.rest) ? B.S.rest : 60; }
 function morningReady(B, st, t) {
-  const m = val(st, "mc:" + t); if (!m) return null; const base = restBase(B, st, t), why = []; let score = 0;
+  const m = val(st, "mc:" + t) || (val(st, "gar:d:" + t) ? {} : null); if (!m) return null; const base = restBase(B, st, t), why = []; let score = 0;
   if (num(m.puls)) { const dp = m.puls - base; if (dp >= 7) { score += 2; why.push("Ruhepuls " + m.puls + " (+" + dp + ")"); } else if (dp >= 4) { score += 1; why.push("Ruhepuls +" + dp); } }
   if (num(m.sleep)) { if (m.sleep < 5.5) { score += 2; why.push(m.sleep + " h Schlaf"); } else if (m.sleep < 6.5) { score += 1; why.push(m.sleep + " h Schlaf"); } }
   if (num(m.feel)) { if (m.feel <= 1) { score += 2; why.push("Gefühl platt"); } else if (m.feel === 2) { score += 1; why.push("Gefühl müde"); } }
   if (num(m.sore) && m.sore >= 3) { score += 1; why.push("starker Muskelkater"); }
   if (num(m.sq) && m.sq <= 1) { score += 1; why.push("schlecht geschlafen"); }
+  const hv = hrvSignal(st, t); if (hv && hv.low) { score += 1; why.push("HRV " + Math.round(hv.v) + (hv.avg ? " (Schnitt " + Math.round(hv.avg) + ")" : "") + " niedrig"); }
   return { cls: score >= 3 ? "bad" : score >= 2 ? "warn" : "ok", score, why: why.join(", ") || "Alles im grünen Bereich", base };
 }
 function weightList(st) { return Object.keys(st).filter(k => k.startsWith("wt:")).map(k => ({ date: +k.slice(3), v: st[k].v })).filter(x => num(x.date) && num(x.v) && x.v > 30).sort((a, b) => a.date - b.date); }
@@ -1198,6 +1200,82 @@ function ics(B, st, t) {
 function autoOk(p, E, st) { if (!p || !p.ops || !p.ops.length || p.needsOk) return false; if (/^(man|mand|ai):/.test(p.key)) return false;
   if (st && p.ops.some(o => val(st, "nou:" + (o.type === "add" ? String(o.s.id).split("~")[0] : o.id)))) return false;
   return !p.ops.some(o => isTestOp(o, E) || (o.type !== "add" && (E.find(x => x.id === o.id) || {}).test === "race")); }
+/* ---------- 4.3 Garmin Personal API: Rohdaten auswerten und in den Plan übernehmen ----------
+   Die Feldnamen der Personal API sind nicht vollständig dokumentiert. Deshalb sucht die Auswertung tolerant nach den
+   üblichen Namen (Connect-Web-Format und Health-API-Format). Was nicht erkannt wird, bleibt leer, es wird nichts geraten. */
+const G_SPORT = [[/swim|schwimm/, "Schwimmen"], [/cycl|bik|ride|rad|spin/, "Rad"], [/run|lauf|jog/, "Lauf"], [/strength|kraft|gym|weight|hiit|crossfit/, "Kraft"], [/yoga|pilates|mobility|stretch|breath/, "Mobility"]];
+const G_NAMES = { padel: "Padel", tennis: "Tennis", hiking: "Wandern", walking: "Gehen", resort_skiing: "Ski alpin", resort_skiing_snowboarding_ws: "Ski alpin", backcountry_skiing: "Skitour", cross_country_skiing_ws: "Langlauf", soccer: "Fußball", rowing: "Rudern", indoor_rowing: "Rudern (indoor)", stand_up_paddleboarding: "SUP", golf: "Golf", squash: "Squash", badminton: "Badminton", table_tennis: "Tischtennis", basketball: "Basketball", climbing: "Klettern", bouldering: "Bouldern", elliptical: "Crosstrainer", stair_climbing: "Treppen", multi_sport: "Multisport" };
+function gSport(typeKey) { const k = String(typeKey || "").toLowerCase(); if (/multi_sport|triathlon/.test(k)) return "Sonstiges"; const m = G_SPORT.find(([re]) => re.test(k)); return m ? m[1] : "Sonstiges"; }
+const gNum = v => typeof v === "number" && isFinite(v) ? v : typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v.trim()) ? +v : null;
+function gPick(o, names) { if (!o || typeof o !== "object") return null; for (const n of names) { const path = n.split("."); let x = o; for (const p of path) x = x == null ? undefined : x[p]; const v = gNum(x); if (v != null) return v; } return null; }
+function gWalk(node, fn, depth) { depth = depth || 0; if (!node || typeof node !== "object" || depth > 8) return; if (Array.isArray(node)) { node.forEach(n => gWalk(n, fn, depth + 1)); return; } fn(node); for (const k in node) if (node[k] && typeof node[k] === "object") gWalk(node[k], fn, depth + 1); }
+const gDateOf = o => { for (const k of ["calendarDate", "summaryDate", "date", "calendarDay", "day", "startDate"]) { const v = o[k]; if (typeof v === "string" && /^\d{4}-\d\d-\d\d/.test(v)) return v.slice(0, 10); } return null; };
+const isoSerial = s => serialOf(new Date(s + "T12:00:00"));
+function garminNormalize(raw) {
+  const acts = [], days = {};
+  const D = iso => days[iso] = days[iso] || {};
+  (raw && raw.acts || []).forEach(a => {
+    const id = a.activityId ?? a.summaryId ?? a.id; if (id == null) return;
+    const st = a.startTimeLocal || a.startTimeGMT || a.startTime || (gNum(a.startTimeInSeconds) != null ? new Date((a.startTimeInSeconds + (a.startTimeOffsetInSeconds || 0)) * 1000).toISOString().replace("T", " ") : "");
+    const iso = String(st).slice(0, 10); if (!/^\d{4}-\d\d-\d\d$/.test(iso)) return;
+    const typeKey = (a.activityType && (a.activityType.typeKey || a.activityType.key)) || a.activityType || a.sportType || a.type || "";
+    const dist = gPick(a, ["distance", "distanceInMeters", "summary.distance"]), dur = gPick(a, ["duration", "durationInSeconds", "elapsedDuration", "movingDuration", "summary.duration"]);
+    const sport = gSport(typeKey), tk = String(typeKey).toLowerCase();
+    acts.push({ gid: String(id), iso, date: isoSerial(iso), time: String(st).slice(11, 16), typeKey: tk, sport, name: a.activityName || G_NAMES[tk] || (sport === "Sonstiges" ? tk.replace(/_/g, " ").replace(/^./, c => c.toUpperCase()) : sport),
+      dist: dist != null ? Math.round(dist) / 1000 : null, dur: dur != null ? Math.round(dur / 6) / 10 : null,
+      hf: gPick(a, ["averageHR", "averageHeartRateInBeatsPerMinute", "avgHr", "averageHeartRate"]), hfmax: gPick(a, ["maxHR", "maxHeartRateInBeatsPerMinute", "maxHr", "maxHeartRate"]),
+      hm: gPick(a, ["elevationGain", "totalElevationGainInMeters", "elevationGainInMeters"]), cal: gPick(a, ["calories", "activeKilocalories"]) });
+  });
+  const take = (src, fn) => gWalk(src, o => { const iso = gDateOf(o); if (iso) fn(D(iso), o); });
+  take(raw && raw.daily, (d, o) => { const r = gPick(o, ["restingHeartRate", "restingHeartRateInBeatsPerMinute", "heartRate.restingHeartRate", "heartRate.restingValue", "restingHeartRateValue"]); if (r != null && d.rhr == null) d.rhr = r;
+    const s = gPick(o, ["totalSteps", "steps", "movement.steps", "movement.totalSteps"]); if (s != null && d.steps == null) d.steps = s;
+    const sl = gPick(o, ["averageStressLevel", "stress.averageStressLevel", "stress.avgStressLevel", "averageStress", "stress.overallStressLevel"]); if (sl != null && sl >= 0 && d.stress == null) d.stress = sl;
+    const bh = gPick(o, ["bodyBatteryHighestValue", "bodyBattery.highestValue", "bodyBattery.highest", "bodyBattery.maxValue"]); if (bh != null && d.bbHi == null) d.bbHi = bh;
+    const bl = gPick(o, ["bodyBatteryLowestValue", "bodyBattery.lowestValue", "bodyBattery.lowest", "bodyBattery.minValue"]); if (bl != null && d.bbLo == null) d.bbLo = bl; });
+  take(raw && raw.stress, (d, o) => { if (d.stress != null) return; const v = gPick(o, ["averageStressLevel", "overallStressLevel", "avgStressLevel", "values.overallStressLevel", "values.averageStressLevel", "value"]); if (v != null && v >= 0 && v <= 100) d.stress = v; });
+  take(raw && raw.steps, (d, o) => { if (d.steps != null) return; const v = gPick(o, ["totalSteps", "steps", "values.totalSteps", "value"]); if (v != null) d.steps = v; });
+  take(raw && raw.sleep, (d, o) => { const s = gPick(o, ["sleepTimeSeconds", "sleepTimeInSeconds", "totalSleepTimeInSeconds", "durationInSeconds", "dailySleepDTO.sleepTimeSeconds"]); if (s != null && s > 0 && d.sleep == null) d.sleep = Math.round(s / 360) / 10;
+    const sc = gPick(o, ["sleepScores.overall.value", "overallSleepScore.value", "sleepScore", "score", "overallScore", "sleepScores.overallScore"]); if (sc != null && sc <= 100 && d.score == null) d.score = sc;
+    const r = gPick(o, ["restingHeartRate", "restingHeartRateInBeatsPerMinute"]); if (r != null && d.rhr == null) d.rhr = r; });
+  take(raw && raw.bb, (d, o) => { const hi = gPick(o, ["highest", "bodyBatteryHighestValue", "highestValue", "max", "charged"]), lo = gPick(o, ["lowest", "bodyBatteryLowestValue", "lowestValue", "min"]); if (hi != null && d.bbHi == null) d.bbHi = hi; if (lo != null && d.bbLo == null) d.bbLo = lo; });
+  take(raw && raw.hrv, (d, o) => { const v = gPick(o, ["lastNightAvg", "lastNightAverage", "hrvValue", "avgOvernightHrv", "lastNight"]); if (v != null && d.hrv == null) d.hrv = v; if (typeof o.status === "string" && !d.hrvSt) d.hrvSt = o.status; });
+  for (const k in days) if (!Object.keys(days[k]).length) delete days[k];
+  return { acts: acts.sort((a, b) => a.date - b.date || a.time.localeCompare(b.time)), days };
+}
+const SCORE_SQ = s => s >= 90 ? 5 : s >= 80 ? 4 : s >= 70 ? 3 : s >= 60 ? 2 : 1;
+/* Übernahme: liefert Änderungen als [Schlüssel, Wert]. Von Hand Eingetragenes hat Vorrang. Wiederholtes Aktualisieren ist idempotent. */
+function garminApply(B, st, t, N) {
+  const E = effective(B, st), puts = [], sum = { done: 0, enriched: 0, free: 0, days: 0, names: [] }, claimed = new Set();
+  Object.keys(st).forEach(k => { if (k.startsWith("log:")) { const l = st[k].v; if (l && l.gid) claimed.add(l.gid + "|" + k.slice(4)); } });
+  const usedS = new Set();
+  N.acts.forEach(a => {
+    if (val(st, "gign:" + a.gid)) return;
+    const prev = Object.keys(st).find(k => k.startsWith("log:") && (st[k].v || {}).gid === a.gid);
+    let s = prev ? E.find(x => x.id === prev.slice(4)) : null;
+    if (!s) { const cand = E.filter(x => x.date === a.date && x.sport === a.sport && isTrain(x) && !x.dropped && !usedS.has(x.id) && !((val(st, "log:" + x.id) || {}).gid)); cand.sort((x, y) => Math.abs((x.min || 0) - (a.dur || 0)) - Math.abs((y.min || 0) - (a.dur || 0))); s = cand[0] || null; }
+    if (s) { usedS.add(s.id); const l = val(st, "log:" + s.id) || {}, manual = l.src !== "garmin" && (num(l.dur) || num(l.dist) || num(l.ikm) || num(l.imin));
+      const nl = Object.assign({}, l, { st: l.st === "½" ? "½" : "✓", gid: a.gid, src: manual ? (l.src || "hand") : "garmin" });
+      if (!manual) Object.assign(nl, { dur: a.dur, dist: a.dist, ikm: undefined, imin: undefined });
+      ["hf", "hfmax", "hm"].forEach(f => { if (nl[f] == null && a[f] != null) nl[f] = a[f]; });
+      if (JSON.stringify(nl) !== JSON.stringify(l)) { puts.push(["log:" + s.id, nl]); if (l.st && manual) sum.enriched++; else sum.done++; sum.names.push(a.name); }
+      return; }
+    const k = "free:g" + a.gid, f = val(st, k), nf = { date: a.date, sport: a.sport, name: a.name, dur: a.dur, dist: a.sport === "Kraft" || a.sport === "Mobility" ? null : a.dist, hf: a.hf, hm: a.hm, src: "garmin", gid: a.gid, typeKey: a.typeKey };
+    if (f && f.src !== "garmin") return; /* von Hand bearbeitet: nicht überschreiben */
+    if (f && f.del) return;
+    if (!f || JSON.stringify(Object.assign({}, f)) !== JSON.stringify(Object.assign({}, f, nf))) { puts.push([k, Object.assign({}, f || {}, nf)]); if (!f) { sum.free++; sum.names.push(a.name); } }
+  });
+  for (const iso in N.days) { const d = N.days[iso], ser = isoSerial(iso), gk = "gar:d:" + ser, old = val(st, gk);
+    if (JSON.stringify(old) !== JSON.stringify(d)) { puts.push([gk, d]); sum.days++; }
+    const m = val(st, "mc:" + ser) || {}, nm = Object.assign({}, m);
+    if (nm.sleep == null && d.sleep != null) nm.sleep = d.sleep; if (nm.sq == null && d.score != null) nm.sq = SCORE_SQ(d.score); if (nm.puls == null && d.rhr != null) nm.puls = d.rhr;
+    if (JSON.stringify(nm) !== JSON.stringify(m)) puts.push(["mc:" + ser, Object.assign(nm, { gsrc: true })]); }
+  return { puts, sum };
+}
+/* HRV gegen den eigenen Schnitt der letzten 7 Tage (mind. 4 Werte). */
+function hrvSignal(st, t) { const g = val(st, "gar:d:" + t); if (!g || !num(g.hrv)) return null; const prev = []; for (let d = t - 7; d < t; d++) { const x = val(st, "gar:d:" + d); if (x && num(x.hrv)) prev.push(x.hrv); }
+  const avg = prev.length >= 4 ? prev.reduce((a, b) => a + b, 0) / prev.length : null, low = (avg && g.hrv < avg * .88) || /low|poor|unbalanced/i.test(g.hrvSt || "");
+  return { v: g.hrv, avg, low, st: g.hrvSt || "" }; }
+
 /* ---------- 4.1 Übersicht je Sportart: im Soll (Woche, seit Planstart) und Leistung Start/heute/Ziel ---------- */
 function sportSummary(B, st, t, E) {
   E = E || effective(B, st); const fr = freeList(st), R = derive(B, st), R0 = derive(B, {}), P = progSpan(R, B.S), P0 = progSpan(R0, B.S);
@@ -1348,6 +1426,6 @@ function segText(segs, sport) {
   return segs.map(s => s.kind === "wu" ? "WU " + (s.km != null ? d(s.km) : Math.round(s.min) + " min") : s.kind === "cd" ? "CD " + (s.km != null ? d(s.km) : Math.round(s.min) + " min")
     : s.n + "×" + (s.eachMin != null ? Math.round(s.eachMin * 10) / 10 + " min" : d(s.each)) + (s.pace ? " " + p(s.pace) : "") + (s.inT ? " in " + p(s.inT).slice(1) : "") + (s.kind === "trab" ? " Trab" : "")).join(" · ");
 }
-G.Engine = { painLvl, sportSummary, parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
+G.Engine = { garminNormalize, garminApply, hrvSignal, gSport, painLvl, sportSummary, parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
   util: { timeRange, hhmm, sd, serialOf, fmtD, wdD, mss, hms, r1, WD, WDL, tStart, RACE_TYPES, stageOf } };
 })(typeof window !== "undefined" ? window : globalThis);

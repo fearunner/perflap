@@ -1,6 +1,60 @@
-# Gehhilfe 4.1: Klick-Anleitung
+# Gehhilfe 4.3: Klick-Anleitung
 
-## Neu in 4.1
+## Neu in 4.3: Garmin automatisch
+
+Ein Tipp auf **Aktualisieren** (Kreispfeil oben rechts in Übersicht und Fortschritt) holt deine Garmin-Daten über die offizielle Garmin Connect Personal API:
+
+- **Trainings:** Ein Lauf, eine Radfahrt oder ein Schwimmen am selben Tag wie eine geplante Einheit derselben Sportart gilt als erledigt, mit Distanz, Dauer, Puls und Höhenmetern. Was du schon von Hand eingetragen hast, bleibt stehen, Garmin ergänzt nur fehlende Werte wie den Puls.
+- **Alles andere,** zum Beispiel Padel, wird ein freies Training. Es zählt mit Dauer und Puls für Belastung, Formkurve und die Anpassungen.
+- **Gesundheit:** Schlaf, Schlaf-Score und Ruhepuls füllen den Morgen-Check. HRV, Stress, Body Battery und Schritte stehen unter **Körper**. Liegt die HRV deutlich unter deinem 7-Tage-Schnitt, wird der Morgen-Check gelb und harte Einheiten werden entschärft.
+- **Rückgängig:** Die Meldung nach dem Abruf hat **Rückgängig**. Damit wird der ganze Abruf zurückgenommen, und diese Aktivitäten kommen auch beim nächsten Mal nicht wieder.
+- **Erster Abruf:** Er holt alles ab dem Planstart (12.10.), danach jeweils nur die letzten Tage. Mehrfaches Tippen legt nichts doppelt an.
+- **Andere Geräte:** Sie bekommen die Garmin-Daten über den Geräteabgleich, dort musst du nicht noch einmal aktualisieren.
+- **VO2max:** Garmin liefert den VO2max über diese Schnittstelle nicht mit. Den trägst du weiter im Check-in ein.
+
+### Einmalig einrichten (nach dem Supabase-Konto, ca. 10 Minuten)
+
+1. **Garmin-Schlüssel erzeugen:** Am Mac connect.garmin.com öffnen, **Einstellungen**, ganz unten **Personal API Key**, **Create Key**. Bedingungen bestätigen und als Laufzeit **1 Jahr** wählen. Den Schlüssel sofort kopieren, Garmin zeigt ihn nur einmal. Bitte nicht in den Chat schicken.
+2. **Supabase, SQL:** Im **SQL Editor** die Datei `App-Entwicklung/supabase_setup.sql` noch einmal komplett ausführen. Sie enthält jetzt auch die Ablage für das Garmin-Zugangstoken.
+3. **Supabase, Funktion:** Links **Edge Functions**, **Deploy a new function**, **Via Editor**. Als Name genau `garmin` eintragen. Den Inhalt von `App-Entwicklung/supabase/garmin/index.ts` hineinkopieren und **Deploy function** klicken. „Verify JWT“ bleibt eingeschaltet.
+4. **Supabase, Secrets:** **Edge Functions**, **Secrets** (bzw. **Manage secrets**). Zwei Einträge anlegen: `GARMIN_API_KEY` mit deinem Garmin-Schlüssel und `ALLOWED_EMAIL` mit deiner Login-Adresse. Speichern.
+5. In der App **Aktualisieren** tippen. Der erste Abruf dauert ein paar Sekunden.
+
+**Schlüssel abgelaufen?** Die App meldet dann „Garmin-Schlüssel abgelehnt“. Erzeuge in Garmin Connect einen neuen Schlüssel und ersetze in Supabase den Wert von `GARMIN_API_KEY`. Mehr ist nicht zu tun.
+
+## Gehhilfe 4.2
+
+### Geräte abgleichen
+
+iPhone, Mac und Laptop arbeiten mit denselben Daten. Jede Änderung geht sofort in deine eigene Datenbank bei Supabase (Server in Frankfurt). Die anderen Geräte holen sie beim Öffnen und alle 30 Sekunden. Offline trägst du weiter ein, abgeglichen wird, sobald wieder Netz da ist. Bei gleichzeitigen Änderungen am selben Eintrag gewinnt der neuere. Der angepasste Plan ist auf allen Geräten gleich, weil jedes Gerät ihn aus denselben Einträgen berechnet.
+
+### Einmalig einrichten (ca. 10 Minuten, am Mac)
+
+Supabase ändert seine Oberfläche gelegentlich. Wenn ein Menüpunkt anders heißt, such nach dem fett gedruckten Begriff.
+
+1. **supabase.com** öffnen, **Start your project**, mit deinem GitHub-Konto (fearunner) oder deiner privaten E-Mail anmelden.
+2. **New project**: Name `gehhilfe`. Das **Database Password** generieren lassen und im Passwort-Manager speichern, du brauchst es im Alltag nicht. **Region: Central EU (Frankfurt)**, Plan **Free**. Dann **Create new project** und 1 bis 2 Minuten warten.
+3. Links **SQL Editor**, **New query**. Den Inhalt der Datei `App-Entwicklung/supabase_setup.sql` hineinkopieren und **Run** klicken. Es muss „Success“ erscheinen.
+4. Links **Authentication**, dann **Sign In / Providers**, dort **Email** öffnen. Den Schalter **Confirm email** ausschalten und **Save** klicken. (Eigene Mail-Vorlagen gehen im Gratis-Paket nur mit eigenem Mailserver, deshalb meldet sich die App mit E-Mail und Passwort an.)
+5. Links **Project Settings**, dann **API** (oder **API Keys** und **Data API**). Kopiere die **Project URL** und den Schlüssel **anon public** (heißt teils **publishable**). Schick mir beides hier im Chat, ich trage es in `cloud-config.js` ein. Diese beiden Werte sind für den Browser gedacht und dürfen öffentlich sein. Den Schlüssel **service_role** bzw. **secret** schickst du nie, auch nicht mir.
+6. Danach die App wie gewohnt auf GitHub hochladen.
+
+### Auf jedem Gerät anmelden
+
+1. Am Gerät mit deinen aktuellen Daten zuerst: **Profil**, **Sync und Export**, **Geräte abgleichen**. Private E-Mail und ein neues Passwort (mindestens 8 Zeichen) eingeben, **Konto anlegen**. Jetzt lädt die App deinen kompletten Stand hoch.
+2. Auf dem iPhone und dem Laptop: Beim Öffnen erscheint **Anmelden und Daten holen**. Dieselbe E-Mail und dasselbe Passwort eingeben, **Anmelden**. Der Stand kommt automatisch.
+3. Wenn alle Geräte angemeldet sind: In Supabase unter **Authentication**, **Sign In / Providers** die Option **Allow new users to sign up** ausschalten. Dann kann sich niemand sonst ein Konto in deiner Datenbank anlegen.
+
+### Gut zu wissen
+
+- **Kostenloses Paket:** Supabase pausiert kostenlose Projekte nach etwa einer Woche ohne jede Nutzung. Benutzt du die App regelmäßig, passiert das nicht. Falls doch: im Supabase-Dashboard **Restore** klicken, die Daten bleiben erhalten.
+- **Passwort vergessen:** In Supabase unter **Authentication**, **Users** dein Konto öffnen und ein neues Passwort setzen. Deine Daten bleiben erhalten.
+- **Abmelden** löscht die Daten auf dem jeweiligen Gerät, in der Cloud bleibt alles. Sinnvoll zum Beispiel am Arbeitslaptop.
+- **Datenschutz:** Deine Gesundheitsdaten (Schmerz, Krankheit, Gewicht) liegen dann bei Supabase in Frankfurt, geschützt durch dein Konto. Ob du das möchtest, entscheidest du. Ob die private Nutzung am Firmenlaptop erlaubt ist, regelt die PPI.
+- Die Sync-Datei in iCloud brauchst du nicht mehr. **Sicherung speichern** bleibt als Notfallkopie.
+
+## Gehhilfe 4.1
+
 
 - **Dein Logo:** Opa mit Rollator und den drei Disziplinen, als App-Icon und in der App: in jeder Kopfzeile, in der Seitenleiste, im Coach-Satz, im Profil und beim Start.
 - **Sportarten auf der Übersicht:** Je eine Karte für Laufen, Radfahren und Schwimmen. Sie zeigt, wie viel vom Soll du diese Woche und seit Planstart geschafft hast, und darunter die Leistung als Strecke von Start über heute bis zum Ziel. Laufen zeigt die Marathon-Prognose gegen 3:09. Radfahren zeigt dein Ø-Tempo der letzten 4 Wochen gegen das nötige Renntempo im Allgäu. Schwimmen zeigt deine Pace pro 100 m und ab dem ersten CSS-Test den CSS gegen 1:50. Ein Tipp auf eine Karte öffnet die Details.

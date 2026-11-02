@@ -72,7 +72,7 @@ const idbGet = async k => { const db = await dbP; return new Promise(r => { cons
 const idbPut = async (k, v) => { const db = await dbP; return new Promise(r => { const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").put(v, k); tx.oncomplete = () => r(true); tx.onerror = () => r(false); }); };
 const idbDel = async k => { const db = await dbP; db.transaction("kv", "readwrite").objectStore("kv").delete(k); };
 let saveT = null;
-const saveState = () => { clearTimeout(saveT); saveT = setTimeout(() => idbPut("state", ST), 120); scheduleSync(); scheduleExp(); };
+const saveState = () => { clearTimeout(saveT); saveT = setTimeout(() => idbPut("state", ST), 120); scheduleSync(); scheduleExp(); scheduleCloud(); };
 const get = k => E.val(ST, k);
 function put(k, v) { ST[k] = { v, t: Date.now() }; MEMO.k = null; saveState(); }
 function set(k, v) { put(k, v); render(); }
@@ -296,7 +296,7 @@ function vHeute(c) {
   const t = c.t, h = heroPick(c), v = verdict(c.cw), sick = get("sick"), sickNow = sick && num(sick.from) && !num(sick.to);
   LP = c.P;
   const open = c.Ex.filter(s => s.date < t && s.date >= t - 14 && needs(s, t) && !s.dropped);
-  let x = `<header class="lt"><div><div class="eyebrow">${esc(longDate(t))}${c.pre ? " · Start in " + (B.S.start - t) + " Tagen" : " · Woche " + c.cw + " von " + c.NW}</div><h1>Übersicht</h1></div><div class="acts"><button class="avatar" data-tab="prof" aria-label="Profil"><img src="logo.png" alt=""></button></div></header>`;
+  let x = `<header class="lt"><div><div class="eyebrow">${esc(longDate(t))}${c.pre ? " · Start in " + (B.S.start - t) + " Tagen" : " · Woche " + c.cw + " von " + c.NW}</div><h1>Übersicht</h1></div><div class="acts">${GAR_BTN()}<button class="avatar" data-tab="prof" aria-label="Profil"><img src="logo.png" alt=""></button></div></header>`;
   x += banners();
   if (sickNow) { const sc = E.SICK_CAT[sick.cat], hals = sick.cat === "hals", inj = sick.cat === "verletzung" && E.REGIONS[sick.region];
     x += `<div class="banner ${hals ? "" : "err"}">${ui("sick")}<div class="tx"><b>${esc(sc ? sc.short : "Krank")} seit ${esc(U.wdD(sick.from))}</b> ${hals ? "Nur locker, höchstens 45 Minuten." : inj ? "Pausiert: " + esc(inj.aff.join(", ")) + ". Rest nur schmerzfrei." : "Kein Training, nichts zählt als verpasst."}</div><span class="bt" style="display:flex;gap:6px">${sc ? "" : `<button class="btn sm ghost" data-act="sick">Details</button>`}<button class="btn sm" data-act="sickend">Wieder gesund</button></span></div>`; }
@@ -378,7 +378,9 @@ function dashGrid(c, h) {
     : `<button class="btn wide" data-act="kg">${ui("fork")}Gewicht eintragen für Ernährungsziele</button>`, `<button class="lnk" data-act="fd" data-v="${t}">Tagebuch ${ui("chev")}</button>`, N ? N.khT + " g KH · " + filled + "/4 notiert" : "Gewicht fehlt", ["fork", "var(--ok)"]);
   // Körper: Morgen-Check + Gewicht
   const R0 = E.morningReady(B, ST, t), WT = E.weightTrend(ST, t);
-  g += tile("t-body", `<h3>Körper</h3>`, `<div class="body2"><button class="bodyb ${R0 ? R0.cls : ""}" data-act="mc" data-v="${t}"><span>Morgen-Check</span><b>${R0 ? (R0.cls === "ok" ? "Bereit" : R0.cls === "warn" ? "Gelb" : "Rot") : "Offen"}</b><small>${esc(R0 ? R0.why : "10 Sekunden, steuert den Plan")}</small></button>
+  const GD = (() => { for (let d = t; d >= t - 2; d--) { const x = get("gar:d:" + d); if (x) return Object.assign({ d }, x); } return null; })(), HV = E.hrvSignal(ST, GD ? GD.d : t);
+  const gst = GD ? `<div class="gstats">${[["Schlaf", num(GD.sleep) ? de(GD.sleep) + " h" : "–", num(GD.score) ? "Score " + GD.score : ""], ["Ruhepuls", num(GD.rhr) ? GD.rhr : "–", "bpm"], ["HRV", num(GD.hrv) ? Math.round(GD.hrv) : "–", HV && HV.low ? "niedrig" : HV && HV.avg ? "Ø " + Math.round(HV.avg) : "ms"], ["Stress", num(GD.stress) ? Math.round(GD.stress) : "–", "Ø Tag"], ["Body Battery", num(GD.bbHi) ? GD.bbHi + (num(GD.bbLo) ? "–" + GD.bbLo : "") : "–", "max–min"], ["Schritte", num(GD.steps) ? Math.round(GD.steps).toLocaleString("de-DE") : "–", ""]].map(([l, v, s]) => `<div class="gs${l === "HRV" && HV && HV.low ? " warn" : ""}"><span>${l}</span><b>${v}</b><small>${esc(s)}</small></div>`).join("")}</div><p class="note">Garmin · ${GD.d === t ? "heute" : U.wdD(GD.d)}</p>` : "";
+  g += tile("t-body", `<h3>Körper</h3>`, gst + `<div class="body2"><button class="bodyb ${R0 ? R0.cls : ""}" data-act="mc" data-v="${t}"><span>Morgen-Check</span><b>${R0 ? (R0.cls === "ok" ? "Bereit" : R0.cls === "warn" ? "Gelb" : "Rot") : "Offen"}</b><small>${esc(R0 ? R0.why : "10 Sekunden, steuert den Plan")}</small></button>
     <button class="bodyb" data-act="wt"><span>Gewicht (Trend)</span><b>${WT ? de(WT.cur) + " kg" : kg ? de(kg) + " kg" : "–"}</b><small>${WT && WT.n >= 3 ? (WT.wk > 0 ? "+" : "") + de(WT.wk, 2) + " kg/Woche" : "Verlauf ab 3 Werten"}</small></button>
     <button class="bodyb ${v.cls}" data-act="checkin" data-w="${c.cw}"><span>Wochen-Check-in</span><b>${esc(v.txt.split(":")[0])}</b><small>Ruhepuls, Schmerz, Gefühl</small></button></div>`, "", R0 ? (R0.cls === "ok" ? "Bereit" : R0.cls === "warn" ? "Gelb" : "Rot") : "Morgen-Check offen", ["heart", "var(--bad)"]);
   // Abwesenheiten + Rennen
@@ -834,7 +836,7 @@ function vProg(c) {
   const t = c.t, F = c.F, TR = c.TR, R = c.R, today = F.find(x => x.d === t) || F[F.length - 1];
   const vo2 = TR.vo2, vd = TR.vdot, tg = E.vdotTargets(B), lastVo2 = vo2.slice(-1)[0], lastVd = vd.slice(-1)[0];
   const tsbTxt = !today ? "" : today.tsb > 5 ? ["frisch", "ok"] : today.tsb > -10 ? ["ausgewogen", "ok"] : today.tsb > -25 ? ["im Aufbau", "warn"] : ["sehr müde", "bad"];
-  let x = `<header class="lt"><div><div class="eyebrow">Prognose, Form und Aktivitäten</div><h1>Fortschritt</h1></div><div class="acts"><button class="iconbtn" data-act="imp" aria-label="Aktivitäten importieren">${ui("down")}</button><button class="iconbtn" data-act="vo2" aria-label="VO2max eintragen">${ui("plus")}</button></div></header>`;
+  let x = `<header class="lt"><div><div class="eyebrow">Prognose, Form und Aktivitäten</div><h1>Fortschritt</h1></div><div class="acts">${GAR_BTN()}<button class="iconbtn" data-act="imp" aria-label="Aktivitäten importieren">${ui("down")}</button><button class="iconbtn" data-act="vo2" aria-label="VO2max eintragen">${ui("plus")}</button></div></header>`;
   x += `<div class="kpis" style="margin-top:0">
     <button class="kpi" data-act="info" data-v="form"><span class="info">${ui("info")}</span><div class="kl">Form</div><div class="kv">${today ? (today.tsb > 0 ? "+" : "") + Math.round(today.tsb) : "–"}</div><div class="ks ${tsbTxt[1] || ""}">${tsbTxt[0] || ""}</div></button>
     <button class="kpi" data-act="info" data-v="form"><span class="info">${ui("info")}</span><div class="kl">Fitness</div><div class="kv">${today ? Math.round(today.ctl) : "–"}</div><div class="ks">Ermüdung ${today ? Math.round(today.atl) : "–"}</div></button>
@@ -1020,7 +1022,8 @@ async function aiAsk(S) {
   S.data.busy = false; rerenderSheet(S);
 }
 /* ---------- Profil ---------- */
-function syncPill() { return `<button class="syncpill ${syncState === "ok" ? "ok" : syncState === "wait" ? "wait" : syncState === "err" ? "err" : ""}" data-act="synctap" title="${esc(syncMsg)}"><i></i>${syncState === "ok" ? "Synchron" : syncState === "wait" ? "Freigeben" : syncState === "err" ? "Sync prüfen" : "Lokal"}</button>`; }
+function syncPill() { if (CLOUD) { const st = !CL.s ? "" : CL.state === "ok" || CL.state === "busy" ? "ok" : "err"; return `<button class="syncpill ${st}" data-act="synctap" title="${esc(CL.msg)}"><i></i>${!CL.s ? "Lokal" : CL.state === "busy" ? "Gleicht ab" : st === "ok" ? "Synchron" : navigator.onLine === false ? "Offline" : "Sync prüfen"}</button>`; }
+  return `<button class="syncpill ${syncState === "ok" ? "ok" : syncState === "wait" ? "wait" : syncState === "err" ? "err" : ""}" data-act="synctap" title="${esc(syncMsg)}"><i></i>${syncState === "ok" ? "Synchron" : syncState === "wait" ? "Freigeben" : syncState === "err" ? "Sync prüfen" : "Lokal"}</button>`; }
 function vProf(c) {
   const adj = Object.keys(ST).filter(k => k.startsWith("adj:")).map(k => ST[k].v).filter(Boolean).sort((a, b) => b.created - a.created);
   const trv = Object.keys(ST).filter(k => k.startsWith("trv:")).map(k => [k, ST[k].v]).filter(([, v]) => v && !v.del && v.to >= c.t - 30).sort((a, b) => a[1].from - b[1].from);
@@ -1037,9 +1040,9 @@ function vProf(c) {
     ${AION() ? `<button class="row" data-act="ai"><span class="badge-ic" style="--c:var(--ok);--t:var(--ok-t)">${ui("check")}</span><span class="tx"><span class="t1">Plan jetzt prüfen lassen</span><span class="t2">Vorschlag mit Leitplanken, du bestätigst</span></span>${ui("chev", "chev")}</button><button class="row" data-act="aikey"><span class="badge-ic" style="--c:var(--mute);--t:var(--fill)">${ui("shield")}</span><span class="tx"><span class="t1">API-Schlüssel (optional)</span><span class="t2">${PREF.aikey ? "Hinterlegt …" + esc(PREF.aikey.slice(-4)) : "Nicht hinterlegt, Weg A genügt"}</span></span>${ui("chev", "chev")}</button>` : ""}</div>`;
   const linz = c.Ex.find(s => s.test === "race" && s.typ === "M" && s.date >= c.t);
   x += `<div class="sec"><h2>Ernährung</h2></div><div class="grp">${row("fork", "var(--ok)", "Körpergewicht", KG() ? de(KG()) + " kg" : "Noch nicht eingetragen", "kg")}${row("fork", "var(--ok)", "Ernährung heute", "Tagesbedarf und Beispielmahlzeiten", "nut", `data-v="${c.t}"`)}${linz ? row("flag", "var(--gold-s)", "Verpflegungsplan " + esc(linz.name.replace(/^★\s*/, "").replace(/^Marathon\s*/, "")), "Gel- und Trinkplan für das Rennen", "fuel", `data-id="${esc(linz.id)}"`) : ""}${row("book", "var(--ok)", "Ernährung: Quellen", "ACSM, IOC, ISSN", "info", 'data-v="food"')}</div>`;
-  x += `<div class="sec"><h2>Sync und Export</h2></div><div class="grp">${FSA ? (H.sync ? row("sync", "var(--ok)", "Jetzt abgleichen", esc(syncMsg + " · " + H.sync.name), "syncnow") + row("x", "var(--mute)", "Sync trennen", "Datei bleibt erhalten", "syncoff") : row("sync", "var(--lane)", "Sync-Datei anlegen", "Einmal in iCloud Drive speichern, danach automatisch", "synccreate") + row("file", "var(--lane)", "Vorhandene Sync-Datei wählen", "", "syncopen")) : ""}${row("file", "var(--ok)", "Export (Excel)", "Plan, Ist-Werte, Wochen, Tests, Tagebuch" + (H.exp ? " · " + esc(expLine()) : ""), "xlsx")}${EXP_OK ? (H.exp ? row("x", "var(--mute)", "Automatischen Export beenden", esc(H.exp.name) + " bleibt, wie sie ist", "expoff") : row("sync", "var(--ok)", "Automatisch exportieren", "Einmal Speicherort wählen, danach nach jeder Änderung", "exppick")) : ""}${row("cal", "var(--accent-ink)", "Kalender (.ics)", "Ab heute, inklusive Anpassungen", "ics")}${row("up", "var(--lane)", FSA ? "Sicherung speichern" : "Stand sichern", FSA ? "Kompletter Stand als Datei" : "Als Sync-Datei in iCloud Drive sichern und ersetzen", "sharejson")}${row("down", "var(--lane)", FSA ? "Sicherung laden" : "Stand laden", FSA ? "Führt mit dem Stand hier zusammen" : "Sync-Datei aus iCloud Drive öffnen", "loadjson")}</div>`;
+  x += `<div class="sec"><h2>Sync und Export</h2></div><div class="grp">${CLOUD ? row("sync", CL.s ? "var(--ok)" : "var(--lane)", CL.s ? "Geräte abgleichen: an" : "Geräte abgleichen", CL.s ? esc((CL.s.email || "") + " · " + (CL.msg || "")) : "Mit E-Mail-Code anmelden, dann automatisch", "cloud") + (CL.s ? row("down", "var(--ok)", "Garmin aktualisieren", esc(garLine()), "garmin") : "") : ""}${!CLOUD && FSA ? (H.sync ? row("sync", "var(--ok)", "Jetzt abgleichen", esc(syncMsg + " · " + H.sync.name), "syncnow") + row("x", "var(--mute)", "Sync trennen", "Datei bleibt erhalten", "syncoff") : row("sync", "var(--lane)", "Sync-Datei anlegen", "Einmal in iCloud Drive speichern, danach automatisch", "synccreate") + row("file", "var(--lane)", "Vorhandene Sync-Datei wählen", "", "syncopen")) : ""}${row("file", "var(--ok)", "Export (Excel)", "Plan, Ist-Werte, Wochen, Tests, Tagebuch" + (H.exp ? " · " + esc(expLine()) : ""), "xlsx")}${EXP_OK ? (H.exp ? row("x", "var(--mute)", "Automatischen Export beenden", esc(H.exp.name) + " bleibt, wie sie ist", "expoff") : row("sync", "var(--ok)", "Automatisch exportieren", "Einmal Speicherort wählen, danach nach jeder Änderung", "exppick")) : ""}${row("cal", "var(--accent-ink)", "Kalender (.ics)", "Ab heute, inklusive Anpassungen", "ics")}${row("up", "var(--lane)", FSA ? "Sicherung speichern" : "Stand sichern", FSA ? "Kompletter Stand als Datei" : "Als Sync-Datei in iCloud Drive sichern und ersetzen", "sharejson")}${row("down", "var(--lane)", FSA ? "Sicherung laden" : "Stand laden", FSA ? "Führt mit dem Stand hier zusammen" : "Sync-Datei aus iCloud Drive öffnen", "loadjson")}</div>`;
   x += `<div class="sec"><h2>Hilfe</h2></div><div class="grp">${row("book", "var(--ink2)", "Wie die App anpasst", "Regeln und Quellen", "rules")}${row("trash", "var(--bad)", "Alle Daten löschen", "Nur auf diesem Gerät", "reset")}</div>`;
-  x += `<div class="brandfoot nofold"><img src="logo.png" alt=""><b>Gehhilfe 4.1</b><span>Deine Stütze bis zur Ziellinie</span></div>`;
+  x += `<div class="brandfoot nofold"><img src="logo.png" alt=""><b>Gehhilfe 4.3</b><span>Deine Stütze bis zur Ziellinie</span></div>`;
   x += `<p class="note nofold" style="display:flex;gap:8px;margin-top:16px">${ui("shield")}<span>Plan und Einträge liegen nur auf deinen Geräten und in der Sync-Datei, die du selbst wählst. Die App sendet nichts an Server. Empfehlungen folgen festen Trainingsregeln und ersetzen keine ärztliche Abklärung.</span></p>`;
   return x;
 }
@@ -1112,9 +1115,119 @@ function vWelcome() {
   return `<main class="welcome"><img class="logo" src="logo.png" alt=""><h1>Gehhilfe</h1><p class="lead">Deine Stütze bis Linz und ins Allgäu. Abhaken mit einem Tipp, Training in eigenen Worten notieren, und verpasst du etwas, plant die App neu.</p>
    ${ALERT ? `<div class="banner err">${ui("info")}<div class="tx">${esc(ALERT)}</div></div>` : ""}
    <div class="steps"><div><b>1</b><span>Sync-Datei aus iCloud Drive laden. Beim allerersten Mal die Startdatei <i>Gehhilfe-Startplan.json</i>.</span></div><div><b>2</b><span>Auf dem zweiten Gerät dieselbe Sync-Datei laden.</span></div></div>
-   <div class="acts">${FSA ? '<button class="btn pri wide" data-act="syncopen">Sync-Datei verbinden</button><button class="btn wide" data-act="loadjson">Sicherung oder Startdatei laden</button>' : '<button class="btn pri wide" data-act="loadjson">Sync-Datei oder Startdatei laden</button>'}</div>
+   <div class="acts">${CLOUD ? '<button class="btn pri wide" data-act="cloud">Anmelden und Daten holen</button><button class="btn wide" data-act="loadjson">Sicherung oder Startdatei laden</button>' : FSA ? '<button class="btn pri wide" data-act="syncopen">Sync-Datei verbinden</button><button class="btn wide" data-act="loadjson">Sicherung oder Startdatei laden</button>' : '<button class="btn pri wide" data-act="loadjson">Sync-Datei oder Startdatei laden</button>'}</div>
    <p class="fine">${ui("shield")}<span>Deine Daten bleiben auf deinen Geräten. Die App sendet nichts an Server.</span></p></main>`;
 }
+/* ---------- 4.2 Cloud-Sync über Supabase (eigene Datenbank, Login per E-Mail-Code) ----------
+   Jeder Schlüssel (log:, chk:, adj: …) wird einzeln abgeglichen, der neuere Zeitstempel gewinnt, auf Gerät und Server gleich.
+   Gelöschte Schlüssel gehen als v:null hinaus. SENT merkt sich je Schlüssel den zuletzt abgeglichenen Zeitstempel. */
+const CLOUD = (typeof window !== "undefined" && window.GH_CLOUD && window.GH_CLOUD.url && window.GH_CLOUD.key) ? window.GH_CLOUD : null;
+const CL = { s: null, sent: {}, cursor: "1970-01-01T00:00:00Z", state: "off", msg: "", at: 0, busy: false, again: false, email: "", step: "mail" };
+const clSave = () => idbPut("cloud", { s: CL.s, sent: CL.sent, cursor: CL.cursor, at: CL.at });
+async function clFetch(path, o, noAuth) {
+  o = o || {}; const h = Object.assign({ apikey: CLOUD.key, "Content-Type": "application/json" }, o.headers || {});
+  if (!noAuth) { await clEnsure(); h.Authorization = "Bearer " + CL.s.access_token; }
+  const r = await fetch(CLOUD.url.replace(/\/$/, "") + path, Object.assign({}, o, { headers: h }));
+  if (r.status === 401 && !noAuth && !o._retry) { CL.s.expires_at = 0; return clFetch(path, Object.assign({}, o, { _retry: true })); }
+  const txt = await r.text(); let j = null; try { j = txt ? JSON.parse(txt) : null; } catch (_) {}
+  if (!r.ok) { const e = new Error((j && (j.msg || j.message || j.error_description || j.error)) || ("HTTP " + r.status)); e.status = r.status; throw e; }
+  return j;
+}
+const clSession = j => ({ access_token: j.access_token, refresh_token: j.refresh_token, expires_at: Date.now() + (j.expires_in || 3600) * 1000, email: (j.user && j.user.email) || CL.email, uid: j.user && j.user.id });
+async function clEnsure() {
+  if (!CL.s) throw new Error("Nicht angemeldet");
+  if (CL.s.expires_at - 60000 > Date.now()) return;
+  try { const j = await clFetch("/auth/v1/token?grant_type=refresh_token", { method: "POST", body: JSON.stringify({ refresh_token: CL.s.refresh_token }) }, true); CL.s = Object.assign(CL.s, clSession(j)); clSave(); }
+  catch (e) { if (e.status === 400 || e.status === 401) { CL.s = null; CL.state = "out"; CL.msg = "Bitte neu anmelden"; clSave(); paintChrome(); } throw e; }
+}
+/* 4.3.1: Anmeldung mit E-Mail und Passwort (Supabase erlaubt eigene Mail-Vorlagen im Gratis-Paket nur mit eigenem Mailserver). */
+async function clSignIn(email, pw, create) {
+  CL.email = email; let j;
+  if (create) { j = await clFetch("/auth/v1/signup", { method: "POST", body: JSON.stringify({ email, password: pw }) }, true);
+    if (!j || !j.access_token) throw new Error("Konto angelegt, aber noch nicht bestätigt. In Supabase unter Authentication, Sign In / Providers, Email die Option „Confirm email“ ausschalten und erneut anmelden."); }
+  else j = await clFetch("/auth/v1/token?grant_type=password", { method: "POST", body: JSON.stringify({ email, password: pw }) }, true);
+  CL.s = clSession(j); CL.sent = {}; CL.cursor = "1970-01-01T00:00:00Z"; await clSave(); return clSync(true);
+}
+const clErr = e => /invalid login|invalid_credentials|Invalid login credentials/i.test(e.message) ? "E-Mail oder Passwort stimmt nicht." : /already registered|already been registered|user_already_exists/i.test(e.message) ? "Für diese E-Mail gibt es schon ein Konto. Bitte „Anmelden“ nutzen." : /signups? not allowed|signup_disabled/i.test(e.message) ? "Neue Konten sind gesperrt. Bitte mit dem bestehenden Konto anmelden." : /password/i.test(e.message) && /6|short|weak/i.test(e.message) ? "Das Passwort ist zu kurz (mindestens 8 Zeichen)." : e.message;
+function clMerge(rows) {
+  let ch = false;
+  rows.forEach(r => { const t = +r.t;
+    if (r.k === "__base") { if (r.v && (!B || (r.v.importedAt || 0) > (B.importedAt || 0))) { B = r.v; idbPut("base", B); ch = true; } CL.sent.__base = Math.max(CL.sent.__base || 0, t); return; }
+    const cur = ST[r.k];
+    if (r.v === null) { if (cur && cur.t <= t) { delete ST[r.k]; ch = true; } }
+    else if (cur ? cur.t < t : !(r.k in CL.sent) || CL.sent[r.k] < t) { ST[r.k] = { v: r.v, t }; ch = true; }
+    CL.sent[r.k] = Math.max(CL.sent[r.k] || 0, t); });
+  if (ch) { MEMO.k = null; idbPut("state", ST); }
+  return ch;
+}
+async function clSync(interactive) {
+  if (!CLOUD || !CL.s) return false;
+  if (CL.busy) { CL.again = true; return false; }
+  CL.busy = true; CL.state = "busy"; let changed = false;
+  try {
+    /* 1 Holen: mit 10 s Überlappung, damit gleichzeitig geschriebene Zeilen nicht verloren gehen */
+    for (let i = 0; i < 50; i++) {
+      const since = new Date(new Date(CL.cursor).getTime() - 10000).toISOString();
+      const rows = await clFetch("/rest/v1/gh_kv?select=k,v,t,updated_at&updated_at=gt." + encodeURIComponent(since) + "&order=updated_at.asc&limit=1000");
+      if (!rows || !rows.length) break;
+      if (clMerge(rows)) changed = true;
+      const last = rows[rows.length - 1].updated_at; if (last === CL.cursor && rows.length < 1000) break; CL.cursor = last;
+      if (rows.length < 1000) break;
+    }
+    /* 2 Senden: alles, was hier neuer ist als zuletzt abgeglichen, plus Löschungen */
+    const items = [];
+    if (B && CL.sent.__base !== B.importedAt) items.push({ k: "__base", v: B, t: B.importedAt || 1 });
+    for (const k in ST) { const e = ST[k]; if (e && e.v !== null && e.v !== undefined && (!(k in CL.sent) || e.t > CL.sent[k])) items.push({ k, v: e.v, t: e.t }); }
+    for (const k in CL.sent) if (k !== "__base" && !ST[k]) { const tt = Math.max(Date.now(), CL.sent[k] + 1); items.push({ k, v: null, t: tt }); }
+    for (let i = 0; i < items.length; i += 300) { const part = items.slice(i, i + 300); await clFetch("/rest/v1/rpc/gh_push", { method: "POST", body: JSON.stringify({ items: part }) }); part.forEach(x => { if (x.v === null) delete CL.sent[x.k]; else CL.sent[x.k] = x.t; }); }
+    CL.state = "ok"; CL.at = Date.now(); CL.msg = "Abgeglichen " + new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }); await clSave();
+    if (interactive) toast(changed ? "Abgeglichen, neue Einträge übernommen." : "Alles abgeglichen.", { icon: "sync" });
+  } catch (e) { CL.state = CL.s ? "err" : "out"; CL.msg = navigator.onLine === false ? "Offline, gleicht später ab" : "Sync-Fehler: " + e.message; console.warn(e); if (interactive) toast(CL.msg); }
+  finally { CL.busy = false; if (changed) render(); else paintChrome(); if (CL.again) { CL.again = false; setTimeout(() => clSync(false), 300); } }
+  return changed;
+}
+let clTimer = null;
+function scheduleCloud() { if (!CLOUD || !CL.s) return; clearTimeout(clTimer); clTimer = setTimeout(() => clSync(false), 1500); }
+async function clSignOut() {
+  if (!confirm("Abmelden und alle Daten auf diesem Gerät löschen? In der Cloud bleibt alles erhalten.")) return;
+  try { await clFetch("/auth/v1/logout", { method: "POST" }); } catch (_) {}
+  CL.s = null; CL.sent = {}; CL.cursor = "1970-01-01T00:00:00Z"; CL.state = "off"; await idbDel("cloud"); await idbDel("base"); await idbDel("state"); B = null; ST = {}; MEMO.k = null; render();
+}
+/* 4.3 Garmin: über die Supabase-Funktion "garmin" holen, auswerten, übernehmen. Rückgängig nimmt den ganzen Abruf zurück. */
+const isoOf = ser => U.sd(ser).toISOString().slice(0, 10);
+let garBusy = false;
+async function garminRefresh() {
+  if (!CLOUD || !CL.s) { toast("Für Garmin zuerst unter Profil, Geräte abgleichen anmelden."); return; }
+  if (garBusy || !B) return; garBusy = true; $$("[data-act=garmin]").forEach(b => b.classList.add("spin"));
+  try {
+    await clSync(false);
+    const last = get("set:gar"), t = today(), from = last && last.to ? isoOf(Math.max(B.S.start, fromIso(last.to) - 3)) : isoOf(B.S.start);
+    const res = await clFetch("/functions/v1/garmin", { method: "POST", body: JSON.stringify({ from, to: isoOf(t) }) });
+    const N = E.garminNormalize(res), { puts, sum } = E.garminApply(B, ST, t, N), prev = [], now = Date.now();
+    puts.forEach(([k, v], i) => { prev.push([k, ST[k] ? ST[k] : null]); ST[k] = { v, t: now + i }; });
+    put("set:gar", { at: now, to: isoOf(t), err: (res.errors || []).slice(0, 4), n: N.acts.length });
+    MEMO.k = null; saveState(); render();
+    const parts = []; if (sum.done) parts.push(sum.done + (sum.done === 1 ? " Einheit erledigt" : " Einheiten erledigt")); if (sum.enriched) parts.push(sum.enriched + " ergänzt"); if (sum.free) parts.push(sum.free + " freie" + (sum.free === 1 ? "s Training" : " Trainings")); if (sum.days) parts.push("Gesundheit " + sum.days + (sum.days === 1 ? " Tag" : " Tage"));
+    const gids = N.acts.filter(a => puts.some(([k, v]) => v && v.gid === a.gid)).map(a => a.gid);
+    toast(parts.length ? "Garmin: " + parts.join(", ") + "." + ((res.errors || []).length ? " Teilweise ohne " + res.errors.map(e => e.split(":")[0]).join(", ") + "." : "") : "Garmin: nichts Neues.", { icon: "sync", undo: puts.length ? () => { prev.forEach(([k, o]) => { if (o) ST[k] = { v: o.v, t: Date.now() }; else delete ST[k]; }); gids.forEach(g => { ST["gign:" + g] = { v: true, t: Date.now() }; }); MEMO.k = null; saveState(); render(); toast("Garmin-Abruf zurückgenommen."); } : null });
+  } catch (e) { toast(/404/.test(e.message) ? "Garmin ist in Supabase noch nicht eingerichtet (Funktion garmin fehlt)." : "Garmin nicht erreichbar: " + e.message); console.warn(e); }
+  finally { garBusy = false; $$("[data-act=garmin]").forEach(b => b.classList.remove("spin")); }
+}
+const fromIso = s => U.serialOf(new Date(s + "T12:00:00"));
+const GAR_BTN = () => CLOUD && CL.s ? `<button class="iconbtn gbtn" data-act="garmin" aria-label="Aktualisieren: Garmin-Daten holen" title="Garmin aktualisieren">${ui("sync")}</button>` : "";
+function garLine() { const g = get("set:gar"); return g ? "Zuletzt " + new Date(g.at).toLocaleString("de-DE", { weekday: "short", hour: "2-digit", minute: "2-digit" }) + (g.err && g.err.length ? " · teilweise" : "") : "Noch nie abgerufen"; }
+function cloudSheet(D) {
+  const head = `<div class="sh-head"><span class="badge-ic" style="--c:var(--lane);--t:var(--lane-t)">${ui("sync")}</span><div class="tx"><h2 class="sheet-title" tabindex="-1">Geräte abgleichen</h2><p>iPhone, Mac und Laptop mit einem Konto</p></div><button class="closebtn" data-act="close" aria-label="Schließen">${ui("x")}</button></div>`;
+  if (!CLOUD) return head + `<p class="note">Die Cloud ist noch nicht eingerichtet. Die Anleitung steht in der Klick-Anleitung unter „Geräte abgleichen“.</p>`;
+  if (CL.s) return head + `<div class="grp"><div class="row plain"><span class="tx"><span class="t1">${esc(CL.s.email || "Angemeldet")}</span><span class="t2">${esc(CL.msg || "Angemeldet")}</span></span></div></div>
+    <p class="note" style="margin:12px 2px">Jede Änderung geht sofort in die Cloud. Andere Geräte holen sie beim Öffnen und jede halbe Minute.</p>
+    <div class="sh-foot"><button class="btn" data-act="cloudout">Abmelden</button><button class="btn pri" data-act="cloudnow">${ui("sync")}Jetzt abgleichen</button></div>`;
+  return head + `<p style="margin:0 2px 12px;color:var(--ink2)">Einmal pro Gerät anmelden, danach bleibst du angemeldet. Beim allerersten Mal auf „Konto anlegen“ tippen.</p>
+    <div class="field"><div class="fl"><span>E-Mail</span></div><input class="inp" id="cl-mail" type="email" inputmode="email" autocomplete="username" value="${esc(CL.email)}" placeholder="name@gmx.de"></div>
+    <div class="field"><div class="fl"><span>Passwort</span><b>mindestens 8 Zeichen</b></div><input class="inp" id="cl-pw" type="password" autocomplete="current-password" minlength="8"></div>
+    <div class="sh-foot"><button class="btn" data-act="cloudnew">Konto anlegen</button><button class="btn pri" data-act="cloudlogin">${ui("check")}Anmelden</button></div>`;
+}
+
 /* ---------- Sync und Export ---------- */
 /* 4.0: Keine Excel mehr als Quelle. Automatischer Export (Chrome/Edge am Mac): einmal Speicherort wählen, danach schreibt die App nach Änderungen selbst. */
 const EXP_OK = typeof window !== "undefined" && "showSaveFilePicker" in window;
@@ -1293,7 +1406,8 @@ function bindWeekSwipe() {
 
 /* ---------- Aktionen ---------- */
 const newId = () => "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-function applyAdj(p, auto) { const id = newId(); put("adj:" + id, { id, key: p.key, title: p.title, why: p.why, ops: p.ops, lines: p.lines, created: Date.now(), auto: !!auto }); return id; }
+const keyId = k => { let h = 2166136261; for (const ch of String(k)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return "k" + h.toString(36); };
+function applyAdj(p, auto) { const id = p.key ? keyId(p.key) : newId(); put("adj:" + id, { id, key: p.key, title: p.title, why: p.why, ops: p.ops, lines: p.lines, created: Date.now(), auto: !!auto }); return id; }
 /* Zurücknehmen merkt sich den Vorschlag als abgelehnt, sonst würde die Automatik ihn sofort wieder anwenden. */
 function setAdjUndone(id, u) { const k = "adj:" + id, a = get(k); if (!a) return; put(k, Object.assign({}, a, { undone: u })); if (u) put("dis:" + a.key, true); else if (get("dis:" + a.key)) put("dis:" + a.key, false);
   /* Betroffene Einheiten merken: die Automatik fasst sie danach nicht mehr ungefragt an. */
@@ -1461,7 +1575,14 @@ document.addEventListener("click", async e => {
     case "mday2w": { closeSheet(SHEETS[SHEETS.length - 1], true); planZoom = "woche"; planWeek = Math.max(1, Math.min(C().NW, E.weekOf(B, +v))); render(); break; }
     case "range": progRange = v; render(); break;
     case "alertx": ALERT = ""; render(); break;
-    case "synctap": if (H.sync) syncNow(true); else { tab = "prof"; render(); } break;
+    case "synctap": if (CLOUD) openSheet(S => cloudSheet(S.data), { label: "Geräte abgleichen", data: {} }); else if (H.sync) syncNow(true); else { tab = "prof"; render(); } break;
+    case "cloud": openSheet(S => cloudSheet(S.data), { label: "Geräte abgleichen", data: {} }); break;
+    case "cloudlogin": case "cloudnew": { const m = (($("#cl-mail") || {}).value || "").trim(), pw = ($("#cl-pw") || {}).value || "";
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)) { toast("Bitte eine gültige E-Mail-Adresse eingeben."); break; } if (pw.length < 8) { toast("Das Passwort braucht mindestens 8 Zeichen."); break; }
+      b.disabled = true; try { await clSignIn(m, pw, a === "cloudnew"); if (SHEETS.length) closeSheet(); ALERT = ""; render(); toast(a === "cloudnew" ? "Konto angelegt. Deine Daten sind jetzt in der Cloud." : "Angemeldet. Deine Geräte gleichen sich jetzt ab.", { icon: "check" }); } catch (e) { toast(clErr(e)); b.disabled = false; } break; }
+    case "cloudnow": clSync(true).then(() => { const S = SHEETS[SHEETS.length - 1]; if (S) rerenderSheet(S); }); break;
+    case "cloudout": closeSheet(); clSignOut(); break;
+    case "garmin": garminRefresh(); break;
     case "loadjson": $("#fj").click(); break;
     case "sharejson": if (B) await shareFile(SYNCNAME, "application/json", payload()); break;
     case "synccreate": syncPick(true); break;
@@ -1505,7 +1626,7 @@ document.addEventListener("change", e => {
 $("#fc").addEventListener("change", async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const S = SHEETS[SHEETS.length - 1] || openSheet(SS => impSheet(SS.data), { label: "Import", data: {} });
   try { doImport(await f.text(), S); } catch (err) { toast(err.message.slice(0, 220)); } });
 $("#fj").addEventListener("change", async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return;
-  try { ALERT = ""; const ch = ingest(JSON.parse(await f.text())); render(); toast(ch ? "Stand übernommen und zusammengeführt." : "Schon aktuell.", { icon: "check" }); } catch (err) { ALERT = "Datei nicht lesbar: " + err.message; render(); } });
+  try { ALERT = ""; const ch = ingest(JSON.parse(await f.text())); render(); scheduleCloud(); toast(ch ? "Stand übernommen und zusammengeführt." : "Schon aktuell.", { icon: "check" }); } catch (err) { ALERT = "Datei nicht lesbar: " + err.message; render(); } });
 let wasWide = WIDE(); addEventListener("resize", () => { if (WIDE() !== wasWide) { wasWide = WIDE(); render(); } });
 
 /* ---------- Start ---------- */
@@ -1513,11 +1634,14 @@ let wasWide = WIDE(); addEventListener("resize", () => { if (WIDE() !== wasWide)
   try { B = (await idbGet("base")) || null; ST = (await idbGet("state")) || {}; PREF = Object.assign(PREF, (await idbGet("pref")) || {}); H.sync = (await idbGet("syncHandle")) || null; H.exp = (await idbGet("expHandle")) || null; H.expAt = (await idbGet("expLast")) || 0; idbDel("xlHandle"); idbDel("srcxlsx"); /* 4.0: Excel-Altlasten entfernen */ } catch (e) { console.warn(e); }
   for (const k in ST) if (ST[k] && ST[k].v === null) delete ST[k];
   if (H.sync) { syncState = "wait"; syncMsg = "Einmal tippen zum Freigeben"; }
+  if (CLOUD) { try { const cs = await idbGet("cloud"); if (cs) { CL.s = cs.s || null; CL.sent = cs.sent || {}; CL.cursor = cs.cursor || CL.cursor; CL.at = cs.at || 0; CL.state = CL.s ? "wait" : "off"; } } catch (_) {} }
   doRender(); document.body.classList.add("ready");
   if (H.sync) syncNow(false);
+  if (CLOUD && CL.s) clSync(false);
+  if (CLOUD) { setInterval(() => { if (CL.s && !document.hidden) clSync(false); }, 30000); addEventListener("online", () => clSync(false)); }
   let lastDay = today();
   setInterval(() => { if (today() !== lastDay) { lastDay = today(); MEMO.k = null; render(); } if (H.sync && syncState === "ok") syncNow(false); }, 60000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { if (H.sync) syncNow(false); MEMO.k = null; render(); } });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { if (H.sync) syncNow(false); if (CLOUD && CL.s) clSync(false); MEMO.k = null; render(); } });
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
     /* 3.4: Neue Version übernimmt sofort. Einmal neu laden, aber nie mitten in einer Eingabe. */
     let reloaded = false; const hadCtl = !!navigator.serviceWorker.controller;
@@ -1530,5 +1654,5 @@ let wasWide = WIDE(); addEventListener("resize", () => { if (WIDE() !== wasWide)
     }).catch(() => {});
   }
 })();
-window.__perflab = { get B() { return B; }, get ST() { return ST; }, ingest, buildExport, render: doRender, C };
+window.__perflab = { get B() { return B; }, get ST() { return ST; }, ingest, buildExport, CL, clSync, render: doRender, C };
 })();

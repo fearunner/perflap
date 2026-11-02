@@ -706,9 +706,20 @@ function proposalsV2(B, st, t, E, base) {
   const nh2 = nextHard();
   if (easy.length >= 3 && easy.slice(-3).every(l => l.rpe >= 6) && nh2 && !resolved(st, "rpe:" + nh2.id) && !out.some(p => p.ops.some(o => o.id === nh2.id)))
     out.push({ key: "rpe:" + nh2.id, sev: "warn", title: "Locker fühlt sich hart an: " + nh2.name + " entschärfen", why: "Deine letzten drei lockeren Einheiten hattest du mit RPE 6 oder höher bewertet. Das spricht für Ermüdung, Schlafmangel oder einen beginnenden Infekt. Die nächste harte Einheit wird locker.", ops: [{ type: "edit", id: nh2.id, patch: lockerPatch(nh2, .8, "Hohe RPE bei lockeren Einheiten."), note: "" }] });
+  /* 4.4 G3: Hartes freies Training (Padel, Fußball, Bergtour ...) ohne Plan zählt mit. Die nächste harte Einheit innerhalb von 36 h wird entschärft. */
+  freeList(st).filter(f => f.date >= t - 1 && f.date <= t && freeHard(f, B.S)).forEach(f => {
+    const lim = f.date + 1, taken = new Set(out.flatMap(p => p.ops.map(o => o.id)));
+    const nh = E.find(s => s.date >= Math.max(t, f.date) && (s.date <= lim || (s.date === lim + 1 && tStart(s.time) < 12 * 60)) && open(s) && isHard(s) && !s.test && !already.has(s.id) && !taken.has(s.id));
+    if (!nh || resolved(st, "freehard:" + f.id)) return;
+    const nm = f.name || f.sport || "Freies Training", ld = Math.round(sessionLoad(f.dur, f.rpe, f.hf, B.S));
+    out.push({ key: "freehard:" + f.id, sev: "warn", title: nh.name.replace(/^★\s*/, "") + " locker (nach " + nm + ")", why: nm + " am " + wdD(f.date) + " war hart (" + (num(f.rpe) ? "RPE " + f.rpe + ", " : "") + f.dur + " min, Belastung " + ld + "). Die nächste harte Einheit innerhalb von 36 Stunden wird locker, damit du erholt in die nächste Qualität gehst.", ops: [{ type: "edit", id: nh.id, patch: lockerPatch(nh, .8, "Nach hartem freien Training (" + nm + ")."), note: "" }] });
+  });
   out.forEach(p => p.lines = describeOps(p.ops, E));
   return out;
 }
+/* 4.4 G3: Freies Training gilt als hart ab RPE 7 (mind. 20 min) oder ab 35 Belastungspunkten (Dauer × RPE / 10 bzw. TRIMP), etwa das 2,5-Fache einer lockeren 45-Minuten-Einheit (RPE 3). */
+const FREE_HARD_LOAD = 35;
+function freeHard(f, S) { if (!f || !num(f.dur) || f.dur < 20) return false; if (num(f.rpe) && f.rpe >= 7) return true; return sessionLoad(f.dur, f.rpe, f.hf, S || {}) >= FREE_HARD_LOAD; }
 /* Verläufe für den Fortschritt-Tab. */
 function trends(B, st, t, E) {
   E = E || effective(B, st); const res = k => val(st, "test:" + k) || {};
@@ -1426,6 +1437,66 @@ function segText(segs, sport) {
   return segs.map(s => s.kind === "wu" ? "WU " + (s.km != null ? d(s.km) : Math.round(s.min) + " min") : s.kind === "cd" ? "CD " + (s.km != null ? d(s.km) : Math.round(s.min) + " min")
     : s.n + "×" + (s.eachMin != null ? Math.round(s.eachMin * 10) / 10 + " min" : d(s.each)) + (s.pace ? " " + p(s.pace) : "") + (s.inT ? " in " + p(s.inT).slice(1) : "") + (s.kind === "trab" ? " Trab" : "")).join(" · ");
 }
-G.Engine = { garminNormalize, garminApply, hrvSignal, gSport, painLvl, sportSummary, parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
+/* ---------- 4.4 Gesundheit: Tagesreihen aus Garmin und Morgen-Check, eigener Schnitt, Erkenntnisse ----------
+   Reine Funktionen. Erkenntnisse nur mit genug Daten (mind. 7 Tage mit Werten), sonst leer. Nichts wird geschätzt. */
+const H_KEYS = ["sleep", "score", "rhr", "hrv", "stress", "bbHi", "bbLo", "steps"];
+function healthDays(st, t, n, F) {
+  n = n || 28; const fm = {}; (F || []).forEach(x => { fm[x.d] = x; }); const out = [];
+  for (let d = t - n + 1; d <= t; d++) {
+    const g = val(st, "gar:d:" + d) || {}, m = val(st, "mc:" + d) || {}, f = fm[d], o = { d };
+    H_KEYS.forEach(k => { o[k] = num(g[k]) ? g[k] : null; });
+    if (o.rhr == null && num(m.puls)) o.rhr = m.puls;
+    if (o.sleep == null && num(m.sleep)) o.sleep = m.sleep;
+    o.hrvSt = typeof g.hrvSt === "string" ? g.hrvSt : "";
+    o.has = H_KEYS.some(k => o[k] != null);
+    o.load = f && num(f.load) ? f.load : null; o.ctl = f ? f.ctl : null; o.atl = f ? f.atl : null; o.tsb = f ? f.tsb : null;
+    out.push(o);
+  }
+  return out;
+}
+const hMean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+const hVals = (days, k) => days.map(x => x[k]).filter(num);
+/* Gleitender Schnitt über die letzten win Tage inkl. heute, erst ab min Werten. */
+function rollMean(days, k, win, min) { win = win || 7; min = min || 4;
+  return days.map((x, i) => { const a = hVals(days.slice(Math.max(0, i - win + 1), i + 1), k); return a.length >= min ? hMean(a) : null; }); }
+/* Persönlicher Normalbereich: Schnitt ± 1 Standardabweichung, erst ab min Werten. */
+function bandOf(vals, min) { const a = (vals || []).filter(num); if (a.length < (min || 7)) return null; const m = hMean(a), sd = Math.sqrt(hMean(a.map(v => (v - m) * (v - m))));
+  return { mean: m, sd, lo: m - sd, hi: m + sd, n: a.length }; }
+function healthInsights(days) {
+  const n = days.filter(x => x.has).length, items = [];
+  if (n < 7) return { enough: false, n, items };
+  const r0 = v => Math.round(v), pc = v => Math.round(Math.abs(v) * 100), de1 = v => (Math.round(v * 10) / 10).toLocaleString("de-DE");
+  const last7 = days.slice(-7), prev = days.slice(0, -7);
+  /* Schlaf: kurze Nächte zählen */
+  const sl7 = hVals(last7, "sleep");
+  if (sl7.length >= 5) { const k = sl7.filter(v => v < 6).length, m = hMean(sl7);
+    if (k >= 3) items.push({ key: "sleep", sev: "warn", txt: "Schlaf unter 6 h an " + k + " der letzten 7 Tage.", basis: sl7.length + " Nächte gemessen" });
+    else if (m >= 7) items.push({ key: "sleep", sev: "ok", txt: "Du schläfst gut: im Schnitt " + de1(m) + " h in den letzten 7 Nächten.", basis: sl7.length + " Nächte gemessen" }); }
+  /* HRV am Folgetag harter Tage. Hart = Tageslast mindestens 1,5-fach deines Schnitts an Trainingstagen. */
+  const tl = days.filter(x => num(x.load) && x.load > 0).map(x => x.load), avgL = hMean(tl);
+  if (avgL && hVals(days, "hrv").length >= 7) { const hard = [], rest = [];
+    for (let i = 0; i < days.length - 1; i++) { const a = days[i], b = days[i + 1]; if (!num(b.hrv) || !num(a.load)) continue; (a.load >= 1.5 * avgL ? hard : rest).push(b.hrv); }
+    if (hard.length >= 3 && rest.length >= 3) { const dlt = (hMean(hard) - hMean(rest)) / hMean(rest);
+      items.push(Math.abs(dlt) >= .03 ? { key: "hrvhard", sev: dlt < 0 ? "info" : "ok", txt: "Nach harten Tagen liegt deine HRV am Folgetag im Schnitt " + pc(dlt) + " % " + (dlt < 0 ? "tiefer." : "höher."), basis: hard.length + " harte und " + rest.length + " übrige Tage" }
+        : { key: "hrvhard", sev: "ok", txt: "Harte Tage drücken deine HRV am Folgetag kaum (unter 3 %).", basis: hard.length + " harte und " + rest.length + " übrige Tage" }); } }
+  /* HRV: Wochenschnitt gegen die Vorwochen */
+  const h7 = hVals(last7, "hrv"), hp = hVals(prev, "hrv");
+  if (h7.length >= 4 && hp.length >= 7) { const dlt = (hMean(h7) - hMean(hp)) / hMean(hp);
+    if (dlt <= -.07) items.push({ key: "hrvweek", sev: "warn", txt: "HRV im Wochenschnitt " + pc(dlt) + " % unter deinen Vorwochen (" + r0(hMean(h7)) + " statt " + r0(hMean(hp)) + " ms). Mehr Erholung einplanen.", basis: h7.length + " + " + hp.length + " Messungen" });
+    else if (dlt >= .05) items.push({ key: "hrvweek", sev: "ok", txt: "HRV im Wochenschnitt " + pc(dlt) + " % über deinen Vorwochen. Du verträgst das Training gut.", basis: h7.length + " + " + hp.length + " Messungen" }); }
+  /* Ruhepuls: letzte 3 Tage gegen den eigenen Schnitt davor */
+  const rb = hVals(days.slice(0, -3), "rhr"), r3 = hVals(days.slice(-3), "rhr");
+  if (rb.length >= 7 && r3.length >= 2) { const dlt = hMean(r3) - hMean(rb);
+    if (dlt >= 5) items.push({ key: "rhr", sev: "warn", txt: "Ruhepuls in den letzten 3 Tagen im Schnitt " + r0(dlt) + " Schläge über deinem Schnitt (" + r0(hMean(rb)) + "). Oft ein Zeichen für Ermüdung oder einen beginnenden Infekt.", basis: rb.length + 3 + " Tage" }); }
+  /* Body Battery lädt nachts kaum */
+  const bb7 = hVals(last7, "bbHi");
+  if (bb7.length >= 5) { const k = bb7.filter(v => v < 50).length; if (k >= 3) items.push({ key: "bb", sev: "warn", txt: "Body Battery lädt kaum auf: Höchstwert unter 50 an " + k + " der letzten 7 Tage.", basis: bb7.length + " Tage gemessen" }); }
+  /* Stress: Wochenschnitt gegen die Vorwochen */
+  const s7 = hVals(last7, "stress"), sp = hVals(prev, "stress");
+  if (s7.length >= 5 && sp.length >= 7 && hMean(s7) - hMean(sp) >= 8) items.push({ key: "stress", sev: "warn", txt: "Stress im Wochenschnitt " + r0(hMean(s7)) + ", deutlich über deinen Vorwochen (" + r0(hMean(sp)) + ").", basis: s7.length + " + " + sp.length + " Tage" });
+  const ord = { warn: 0, info: 1, ok: 2 }; items.sort((a, b) => ord[a.sev] - ord[b.sev]);
+  return { enough: true, n, items };
+}
+G.Engine = { freeHard, FREE_HARD_LOAD, healthDays, rollMean, bandOf, healthInsights, H_KEYS, garminNormalize, garminApply, hrvSignal, gSport, painLvl, sportSummary, parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
   util: { timeRange, hhmm, sd, serialOf, fmtD, wdD, mss, hms, r1, WD, WDL, tStart, RACE_TYPES, stageOf } };
 })(typeof window !== "undefined" ? window : globalThis);

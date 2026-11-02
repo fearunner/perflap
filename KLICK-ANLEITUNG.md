@@ -1,4 +1,19 @@
-# Gehhilfe 4.3: Klick-Anleitung
+# Gehhilfe 4.4: Klick-Anleitung
+
+## Neu in 4.4
+
+- **Fünf Tabs:** Übersicht, Gesundheit, Plan, Fortschritt, Profil.
+- **Übersicht:** Drei Ringe zeigen dein Wochen-Soll für Laufen, Rad und Schwimmen. Unter dem Ring steht zum Beispiel „Prognose 3:22“ und „Ziel 3:09“. Ein grauer Ring heißt: diese Woche kein Soll. Die Pille **Garmin** oben rechts holt neue Daten.
+- **Gesundheit:** Bereitschaft, Schlaf, HRV, Ruhepuls, Stress, Body Battery und Schritte über 28 Tage. Dazu Hinweise in Klartext, sobald genug Daten da sind. Gewicht, Ernährung und der Verpflegungsplan stehen jetzt auch hier.
+- **Plan:** Tag antippen öffnet ein kleines Fenster mit den Einheiten. Die Saison zeigt je Woche Soll und Ist, darunter die Phasen mit Zweck.
+- **Einheit:** Oben das Wichtigste, darunter der große Knopf **Erledigt**. Beim Eintragen zuerst frei schreiben, wie es lief. Die App füllt die Felder selbst.
+- **Entwurf:** Schließt du das Eintragen mit Esc, X oder einem Tipp daneben, merkt sich die App deine Eingaben. Beim nächsten Öffnen sind sie wieder da. **Verwerfen** leert das Formular.
+- **Hartes freies Training:** Trägst du etwa Padel mit hoher Anstrengung ein (ab RPE 7) oder kommt es so von Garmin, wird die nächste harte Einheit in den folgenden 36 Stunden locker.
+- **Meldungen:** Löst ein Eintrag eine automatische Anpassung aus, steht beides in einer Meldung. **Rückgängig** nimmt dann beides zurück.
+- **Profil:** Kurz und ohne Einklappen. Abwesenheiten, Plan anpassen, Daten und Geräte, Hilfe. Der Schalter **Plan automatisch anpassen** erklärt, was an und aus bedeutet.
+- **Zweite Meinung von Claude:** Ersetzt den alten KI-Coach. Vier Schritte: Anfrage kopieren, in Claude einfügen, Antwort zurück in die App, Vorschau prüfen und übernehmen. Nichts ändert sich ohne deine Bestätigung.
+- **Fortschritt, Aktivitäten:** Den Zeitraum wählst du jetzt über einen Umschalter mit 4 Wochen, 3 Monate und Saison.
+- **Knöpfe:** Meldungen und sich schließende Fenster fangen keine Klicks mehr ab. Jeder Knopf reagiert beim ersten Tippen.
 
 ## Neu in 4.3: Garmin automatisch
 

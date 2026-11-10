@@ -134,7 +134,8 @@ const RUN_HOW = {
   AC: "Puls exakt halten, Tempo ergibt sich. Gleiche Strecke wie beim letzten Check.",
   TEST: "Gleichmäßig von Anfang bis Ende, erster Kilometer nicht zu schnell."
 };
-function addRunTargets(st, zf) { const code = st.code, z = zf(code === "LR" ? "E" : code) || {}; st.target = code === "AC" ? "HF konstant 145" : z.pace || ""; st.hf = code === "AC" ? "" : z.hf || ""; st.how = st.how || RUN_HOW[code] || ""; st.z = st.z || ZOF[code] || 1; return st; }
+const stT = zf => { const z = zf && zf("ST"); return z && z.st && z.pace ? z.pace + ", locker" : "bis ca. 5-km-Tempo"; };
+function addRunTargets(st, zf) { const code = st.code, z = zf(code === "LR" ? "E" : code) || {}; st.target = code === "AC" ? z.pace || "HF konstant 145" : z.pace || ""; st.hf = code === "AC" ? "" : z.hf || ""; st.how = st.how || RUN_HOW[code] || ""; st.z = st.z || ZOF[code] || 1; return st; }
 function splitDesc(d) {
   d = String(d || "").replace(/\s+/g, " ").trim();
   const parts = d.split(/(?<=[.!])\s+(?=[A-ZÄÖÜ])/), main = [], notes = [];
@@ -156,11 +157,11 @@ function buildRun(s, zf) {
   const push = st => out.push(addRunTargets(st, zf));
   const segs = D.segs.length ? D.segs : [s.desc];
   segs.forEach(sg => { let m; const low = sg.toLowerCase();
-    if ((m = sg.match(/^(\d+(?:[.,]\d+)?)\s*km\s+ein(laufen)?\b/i))) { push({ kind: "warm", lab: "Einlaufen", dist: nfd(m[1]), code: "E", how: "Locker einlaufen, letzte Minuten etwas zügiger." }); const k = sg.match(/(\d+)\s*steigerung/i); if (k || /steigerung/i.test(sg)) out.push({ kind: "strides", lab: "Steigerungen", n: k ? +k[1] : 3, dur: .35, z: 5, target: "bis ca. 5-km-Tempo", rest: { dur: 1, txt: "1' gehen/traben" }, how: "15–20 s zügig beschleunigen, locker bleiben, nicht sprinten.", ex: "steigerung" }); return; }
+    if ((m = sg.match(/^(\d+(?:[.,]\d+)?)\s*km\s+ein(laufen)?\b/i))) { push({ kind: "warm", lab: "Einlaufen", dist: nfd(m[1]), code: "E", how: "Locker einlaufen, letzte Minuten etwas zügiger." }); const k = sg.match(/(\d+)\s*steigerung/i); if (k || /steigerung/i.test(sg)) out.push({ kind: "strides", lab: "Steigerungen", n: k ? +k[1] : 3, dur: .35, z: 5, target: stT(zf), rest: { dur: 1, txt: "1' gehen/traben" }, how: "15–20 s zügig beschleunigen, locker bleiben, nicht sprinten.", ex: "steigerung" }); return; }
     if ((m = sg.match(/^(\d+(?:[.,]\d+)?)\s*km\s+aus(laufen)?\b/i))) { push({ kind: "cool", lab: "Auslaufen", dist: nfd(m[1]), code: "E", how: "Locker auslaufen." }); return; }
     if (/^(locker\s+)?aus(laufen)?$/i.test(sg.trim())) { push({ kind: "cool", lab: "Auslaufen", dist: null, code: "E", how: "Locker auslaufen." }); return; }
-    if ((m = sg.match(/(\d+)\s*x\s*10\s*s\s*hügelsprint/i))) { out.push({ kind: "main", lab: "Hügelsprints", n: +m[1], dur: 10 / 60, z: 5, target: "maximal bergauf, 6–10 % Steigung", rest: { dur: 2, txt: "2' zurückgehen" }, how: "Aufrecht, kräftiger Armeinsatz, kurze Bodenkontakte. Volle Erholung.", ex: "huegelsprint" }); return; }
-    if ((m = sg.match(/(\d+)\s*x\s*(\d+)\s*s\s*steigerung/i)) || (m = sg.match(/(\d+)\s*steigerung/i))) { out.push({ kind: "strides", lab: "Steigerungen", n: +m[1], dur: (m[2] ? +m[2] : 20) / 60, z: 5, target: "bis ca. 5-km-Tempo", rest: { dur: 1, txt: "1' gehen/traben" }, how: "Zügig, locker, nicht sprinten.", ex: "steigerung" }); return; }
+    if ((m = sg.match(/(\d+)\s*x\s*10\s*s\s*hügelsprint/i))) { out.push({ kind: "main", lab: "Hügelsprints", n: +m[1], dur: 10 / 60, z: 5, target: "maximal bergauf (Pace egal), 6–10 % Steigung", rest: { dur: 2, txt: "2' zurückgehen" }, how: "Aufrecht, kräftiger Armeinsatz, kurze Bodenkontakte. Volle Erholung.", ex: "huegelsprint" }); return; }
+    if ((m = sg.match(/(\d+)\s*x\s*(\d+)\s*s\s*steigerung/i)) || (m = sg.match(/(\d+)\s*steigerung/i))) { out.push({ kind: "strides", lab: "Steigerungen", n: +m[1], dur: (m[2] ? +m[2] : 20) / 60, z: 5, target: stT(zf), rest: { dur: 1, txt: "1' gehen/traben" }, how: "Zügig, locker, nicht sprinten.", ex: "steigerung" }); return; }
     if ((m = sg.match(/(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*(km|m|'|s|min)(?!\w)\s*(.*)$/i))) {
       const n = +m[1], v = nfd(m[2]), u = m[3], rest = restOf(m[4]), tail = m[4] || "", head = tail.replace(/\([^)]*\)/g, "").split("/")[0], c0 = runCode(head) || (/zügig|bergauf/.test(tail) ? (u === "s" || (u !== "km" && u !== "m" && v <= 2) ? "I" : "T") : mainCode);
       const st = { kind: "main", lab: n + " × " + (u === "km" ? v + " km" : u === "m" ? v.toLocaleString("de-DE") + " m" : u === "s" ? v + " s" : v + "'"), n, code: c0, rest: rest || { dur: 2, txt: "2' traben" } };
@@ -228,9 +229,9 @@ function buildBike(s, zf) {
 }
 /* ---- Schwimmen ---- */
 const DRILL_KEYS = [["seitlage", /seitlage/i], ["sechseins", /6-1-6/i], ["abschlag", /abschlag/i], ["fingertip", /fingertip/i], ["einarmig", /einarmig/i], ["dreieratmung", /3er-atmung/i], ["pullbuoy", /pullbuoy/i]];
-function buildSwim(s, css) {
-  const D = splitDesc(s.desc), out = [], sec100 = css || 140, cssKnown = !!css;
-  const tgt = (kind, plus) => kind === "css" ? (cssKnown ? mmss(sec100 + (plus || 0)) + " /100 m" : "Schwellentempo, RPE 7") : kind === "fast" ? (cssKnown ? "schneller als " + mmss(sec100 - 3) + " /100 m" : "schnell, RPE 8–9") : kind === "drill" ? "Technik, ohne Uhr" : (cssKnown ? "ca. " + mmss(sec100 + 12) + "–" + mmss(sec100 + 18) + " /100 m" : "ruhig, RPE 3–4");
+function buildSwim(s, css, est) {
+  const D = splitDesc(s.desc), out = [], sec100 = css || est || 140, cssKnown = !!(css || est), gs = css ? "" : " (geschätzt)";
+  const tgt = (kind, plus) => kind === "css" ? (cssKnown ? mmss(sec100 + (plus || 0)) + " /100 m" + gs : "Schwellentempo, RPE 7") : kind === "fast" ? (cssKnown ? "schneller als " + mmss(sec100 - 3) + " /100 m" : "schnell, RPE 8–9") : kind === "drill" ? "Technik, ohne Uhr" : (cssKnown ? "ca. " + mmss(sec100 + 12) + "–" + mmss(sec100 + 18) + " /100 m" : "ruhig, RPE 3–4");
   const mins = (m, kind) => m / 100 * (kind === "drill" ? sec100 + 35 : kind === "css" ? sec100 : kind === "fast" ? sec100 - 5 : sec100 + 15) / 60;
   const push = st => { st.dur = st.dur ?? (st.n || 1) * mins(st.m || 0, st.k) + ((st.n || 1) - 1) * (st.rest ? st.rest.dur : 0); out.push(st); };
   let segs = D.segs.length ? D.segs : [s.desc];
@@ -248,7 +249,7 @@ function buildSwim(s, css) {
       const rd = rest ? +rest / 60 : restM ? +restM : k === "drill" ? .5 : k === "css" ? .25 : .4;
       const how = drill ? EX[drill[0]].cue.join(". ") + "." : k === "css" ? "Gleichmäßig, jede Wiederholung in derselben Zeit. Zeiten notieren." : k === "fast" ? "Zügig mit sauberer Technik, nicht verkrampfen." : /technikfokus/i.test(tail) ? "Je 50 m ein Fokus: lang machen, Ellbogen hoch, ausatmen unter Wasser, Rotation aus der Hüfte." : /nr\.\s*2 und 4 mit pullbuoy|mittlere mit pullbuoy/i.test(tail) ? "Ruhig, " + (tail.match(/\(([^)]*)\)/) || [, ""])[1] + ". Gleichmäßiger Rhythmus." : "Ruhig und gleichmäßig, auf lange Züge achten.";
       push({ kind: k === "drill" ? "drill" : "main", lab, n, m: mm, k, z: k === "css" ? 3 : k === "fast" ? 4 : k === "drill" ? 1 : 2, target: tgt(k, plus), rest: { dur: rd, txt: rest ? rest + " s Pause" : restM ? restM + "' Pause" : k === "drill" ? "20–30 s Pause" : "15–30 s Pause" }, how, ex: drill ? drill[0] : k === "css" ? "css" : /technikfokus/i.test(tail) ? "kraul" : null }); return; }
-    if ((m = sg.match(/(\d+)\s*m\s*vollgas/i))) { push({ kind: "main", lab: m[1] + " m Vollgas", m: +m[1], k: "fast", z: 4, target: cssKnown ? "so schnell wie gleichmäßig möglich" : "gleichmäßig maximal", how: "Nicht zu schnell anschwimmen, Zeit stoppen und notieren.", ex: "csstest" }); return; }
+    if ((m = sg.match(/(\d+)\s*m\s*vollgas/i))) { push({ kind: "main", lab: m[1] + " m Vollgas", m: +m[1], k: "fast", z: 4, target: css ? "so schnell wie gleichmäßig möglich" : est ? "gleichmäßig maximal, Start ca. " + mmss(sec100 - 4) + " /100 m" : "gleichmäßig maximal", how: "Nicht zu schnell anschwimmen, Zeit stoppen und notieren.", ex: "csstest" }); return; }
     if ((m = sg.match(/^(\d+)\s*'\s*locker/i))) { push({ kind: "easy", lab: m[1] + "' locker", dur: +m[1], z: 1, target: tgt("easy"), how: "Locker schwimmen, bei Bedarf Pausen am Rand." }); return; }
   });
   if (!out.length) {
@@ -260,26 +261,26 @@ function buildSwim(s, css) {
       push({ kind: "cool", lab: "100 m ausschwimmen", m: 100, k: "easy", z: 1, target: tgt("easy"), how: "Ganz locker." });
     } else if (/freiwasser|neo/i.test(s.desc) || s.code === "OW") {
       const reps = s.desc.match(/(\d+)\s*x\s*(\d+)\s*(?:m\s*)?(renntempo|zügig)?/i), repsMin = s.desc.match(/(\d+)\s*x\s*(\d+)\s*'\s*renntempo/i);
-      push({ kind: "warm", lab: "Eingewöhnen", dur: 5, z: 1, target: "ruhig", how: "Neo richtig sitzen lassen, Gesicht ins Wasser, ausatmen. Erst ruhig anschwimmen.", ex: "neo" });
-      if (repsMin) push({ kind: "main", lab: repsMin[1] + " × " + repsMin[2] + "' Renntempo", n: +repsMin[1], dur: +repsMin[2], z: 3, target: "Renntempo, RPE 7", rest: { dur: 1, txt: "1' ruhig" }, how: "Alle 6–8 Züge orientieren, gerade Linie halten.", ex: "sighting" });
-      else if (reps) push({ kind: "main", lab: reps[1] + " × " + reps[2] + " m " + (reps[3] || "zügig"), n: +reps[1], m: +reps[2], k: reps[3] ? "fast" : "easy", z: 3, target: "Renntempo, RPE 7", rest: { dur: 1, txt: /boje/i.test(s.desc) ? "1' an der Boje" : "1' ruhig" }, how: "Orientierung alle 6–8 Züge. Wendepunkt eng um die Boje.", ex: "sighting" });
-      const rest = Math.max(5, (s.min || 30) - out.reduce((a, x) => a + x.dur, 0) - 3); push({ kind: "easy", lab: (mtot ? mtot + " m" : rest + "'") + (/renntempo/i.test(s.desc) && !reps && !repsMin ? " im Renntempo" : " ruhig am Stück"), dur: rest, z: /renntempo/i.test(s.desc) && !reps ? 3 : 2, target: /renntempo/i.test(s.desc) && !reps ? "Renntempo" : "ruhig, gleichmäßig", how: "Orientierung alle 6–8 Züge, ruhige Atmung, nie allein (Begleitung oder Boje).", ex: "sighting" });
+      push({ kind: "warm", lab: "Eingewöhnen", dur: 5, z: 1, target: cssKnown ? tgt("easy") : "ruhig", how: "Neo richtig sitzen lassen, Gesicht ins Wasser, ausatmen. Erst ruhig anschwimmen.", ex: "neo" });
+      if (repsMin) push({ kind: "main", lab: repsMin[1] + " × " + repsMin[2] + "' Renntempo", n: +repsMin[1], dur: +repsMin[2], z: 3, target: cssKnown ? "Renntempo ca. " + mmss(sec100 + 4) + " /100 m" + gs : "Renntempo, RPE 7", rest: { dur: 1, txt: "1' ruhig" }, how: "Alle 6–8 Züge orientieren, gerade Linie halten.", ex: "sighting" });
+      else if (reps) push({ kind: "main", lab: reps[1] + " × " + reps[2] + " m " + (reps[3] || "zügig"), n: +reps[1], m: +reps[2], k: reps[3] ? "fast" : "easy", z: 3, target: cssKnown ? "Renntempo ca. " + mmss(sec100 + 4) + " /100 m" + gs : "Renntempo, RPE 7", rest: { dur: 1, txt: /boje/i.test(s.desc) ? "1' an der Boje" : "1' ruhig" }, how: "Orientierung alle 6–8 Züge. Wendepunkt eng um die Boje.", ex: "sighting" });
+      const rest = Math.max(5, (s.min || 30) - out.reduce((a, x) => a + x.dur, 0) - 3); push({ kind: "easy", lab: (mtot ? mtot + " m" : rest + "'") + (/renntempo/i.test(s.desc) && !reps && !repsMin ? " im Renntempo" : " ruhig am Stück"), dur: rest, z: /renntempo/i.test(s.desc) && !reps ? 3 : 2, target: /renntempo/i.test(s.desc) && !reps ? (cssKnown ? "Renntempo ca. " + mmss(sec100 + 4) + " /100 m" + gs : "Renntempo") : (cssKnown ? tgt("easy") : "ruhig, gleichmäßig"), how: "Orientierung alle 6–8 Züge, ruhige Atmung, nie allein (Begleitung oder Boje).", ex: "sighting" });
     } else push({ kind: "easy", lab: (mn ? mn + "'" : "Schwimmen") + " ruhig", dur: mn ? +mn : s.min || 30, z: 1, target: tgt("easy"), how: "Locker, auf lange Züge und ruhige Ausatmung achten.", ex: "kraul" });
   }
   return out;
 }
 /* Einstieg: Abschnitte je Sportart. Für Profil-Balken expandiert profileOf die Wiederholungen. */
-function buildWorkout(s, zf, css) {
+function buildWorkout(s, zf, css, est) {
   let st = [];
   try {
     if (s.sport === "Lauf") st = buildRun(s, zf);
     else if (s.sport === "Rad") st = buildBike(s, zf);
-    else if (s.sport === "Schwimmen") st = buildSwim(s, css);
+    else if (s.sport === "Schwimmen") st = buildSwim(s, css, est);
   } catch (e) { return []; }
   const tot = totalMin(st);
   if (s.min && st.length && tot < s.min * .8) {
     if (s.sport === "Schwimmen") {
-      const sec = css || 140, gap = s.min - tot, ez = css ? "ca. " + mmss(sec + 12) + "–" + mmss(sec + 18) + " /100 m" : "ruhig, RPE 3–4";
+      const sec = css || est || 140, gap = s.min - tot, ez = (css || est) ? "ca. " + mmss(sec + 12) + "–" + mmss(sec + 18) + " /100 m" : "ruhig, RPE 3–4";
       if (!st.some(x => x.kind === "warm")) { const m0 = gap > 12 ? 300 : 200; st.unshift({ kind: "warm", lab: m0 + " m einschwimmen", m: m0, dur: m0 / 100 * (sec + 15) / 60, z: 1, target: ez, how: "Locker gemischt: Kraul, Rücken, Brust. Atmung ruhig." }); }
       if (!st.some(x => x.kind === "cool")) st.push({ kind: "cool", lab: "100 m ausschwimmen", m: 100, dur: (sec + 15) / 60, z: 1, target: ez, how: "Ganz locker." });
       const t2 = totalMin(st); if (t2 < s.min * .8) { const f = s.min / t2; st.forEach(x => { x.dur = x.dur * f; }); }

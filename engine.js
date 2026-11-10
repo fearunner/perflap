@@ -134,6 +134,14 @@ function derive(B, st) {
   R.refHM = ht ? eq(ht) : num(S.baseRef) ? S.baseRef : S.tgtHM;
   const cssD = done.filter(t => t.typ === "CSS400" && num(res(t.key).time)).map(t => { const p = B.tests.find(x => x.typ === "CSS200" && x.date === t.date); const b = p && res(p.key).time; return num(b) ? (res(t.key).time - b) / 2 : null; }).filter(num);
   R.css = cssD.length ? cssD[cssD.length - 1] : null;
+  /* 6.1: Solange kein CSS-Test vorliegt, Schwimm-Pace aus den letzten Einträgen schätzen (Ø-Pace minus 15 s, Pausen sind im Ø enthalten). */
+  R.cssEst = null;
+  if (!num(R.css)) { const sw = new Set(B.plan.filter(p => p.sport === "Schwimmen").map(p => p.id)), L = [];
+    Object.keys(st).forEach(k => { const v = st[k] && st[k].v; if (!v || v.del) return;
+      if (k.startsWith("log:") && sw.has(k.slice(4)) && ["✓", "½"].includes(v.st)) { const s0 = B.plan.find(p => p.id === k.slice(4)); L.push({ d: s0.date, km: v.dist, mn: v.dur }); }
+      else if (k.startsWith("free:") && v.sport === "Schwimmen") L.push({ d: v.date, km: v.dist, mn: v.dur }); });
+    const ok = L.filter(x => num(x.km) && num(x.mn) && x.km >= .3 && x.mn > 0).sort((a, b) => a.d - b.d).slice(-6);
+    if (ok.length) { const sec = ok.reduce((a, x) => a + x.mn * 60, 0) / ok.reduce((a, x) => a + x.km * 10, 0) - 15; if (sec >= 85 && sec <= 220) R.cssEst = sec / 86400; } }
   R.prog = R.refHM * RIEGEL; R.needHM = S.tgtM / RIEGEL;
   const base = S.baseRef, tg = S.tgtHM, lead = num(S.lead) ? S.lead : 150 / 86400;
   R.stages = [R.refHM,
@@ -152,6 +160,8 @@ function zone(s, B, R) {
   const mp = st < 2 ? ref * RIEGEL / MK : Math.max(R.mpGoal, ref * RIEGEL / MK), sec = x => x / 86400;
   const rg = (a, b) => mss(p * a) + "–" + mss(p * b) + " /km";
   const easy = "<" + easyCap(B, R, s.w);
+  /* 6.1: Tests, Aerob-Check und Steigerungen nach aktueller Form (letzter Test bzw. Bestzeit), nicht nach Plan-Stufe. */
+  const pN = R.refHM / HMK, rgN = (a, b) => mss(pN * a) + "–" + mss(pN * b) + " /km";
   switch (s.code) {
     case "E": return { pace: rg(1.18, 1.3), hf: easy };
     case "LR": return { pace: rg(1.2, 1.3), hf: "<" + easyCap(B, R, 99) };
@@ -161,15 +171,16 @@ function zone(s, B, R) {
     case "I": return { pace: rg(.9, .92), hf: "nach Pace, HF hinkt nach" };
     case "HMZ": return { pace: mss(R.hmGoal - sec(2)) + "–" + mss(R.hmGoal + sec(2)) + " /km", hf: rnd(L * .97) + "–" + rnd(L * 1.02) };
     case "MD": return { pace: mss(mp + sec(15)) + "–" + mss(mp + sec(25)) + " /km", hf: rnd(L * .88) + "–" + rnd(L * .92) };
-    case "AC": return { pace: "Pace messen", hf: "konstant " + B.S.ac };
-    case "TEST": return { pace: "gleichmäßig, voll", hf: "" };
+    case "AC": return { pace: "ca. " + rgN(1.14, 1.24) + ", Puls gibt den Takt", hf: "konstant " + B.S.ac };
+    case "TEST": return s.typ === "10K" ? { pace: rgN(.945, .965) + ", gleichmäßig", hf: "" } : { pace: rgN(.955, .985) + ", gleichmäßig", hf: "" };
+    case "ST": return { pace: "ca. " + rgN(.9, .93), hf: "", st: 1 };
     case "M": return { pace: "Ziel " + mss(R.mpGoal) + " /km", hf: rnd(L * .9) + "–" + rnd(L * .94) };
     case "R2": return { pace: "Gefühl 3–4/10, 85–95 U/min", hf: rnd(rl * .81) + "–" + rnd(rl * .89) };
     case "R3": return { pace: "Gefühl 6/10", hf: rnd(rl * .9) + "–" + rnd(rl * .93) };
     case "R4": return { pace: "Gefühl 7–8/10", hf: rnd(rl * .94) + "–" + rnd(rl * .99) };
-    case "SW": return { pace: num(R.css) ? "CSS " + mss(R.css) + " /100 m" : "Technik vor Tempo", hf: "" };
-    case "OW": return { pace: "mit Neo, nie allein (Begleitung oder Schwimmboje)", hf: "" };
-    case "TRI": return { pace: "Rennplan", hf: "" };
+    case "SW": return { pace: num(R.css) ? "CSS " + mss(R.css) + " /100 m" : num(R.cssEst) ? "ruhig ca. " + mss(R.cssEst + sec(12)) + "–" + mss(R.cssEst + sec(18)) + " /100 m" : "ruhig, RPE 3–4 (Pace nach erstem Eintrag)", hf: "" };
+    case "OW": { const c0 = num(R.css) ? R.css : R.cssEst; return { pace: (num(c0) ? "ca. " + mss(c0 + sec(10)) + "–" + mss(c0 + sec(18)) + " /100 m, " : "") + "mit Neo, nie allein", hf: "" }; }
+    case "TRI": return /allgäu|mittel/i.test(s.name) ? { pace: "Lauf " + mss(mp + sec(15)) + "–" + mss(mp + sec(25)) + " /km", hf: "Rad " + rnd(rl * .9) + "–" + rnd(rl * .93) } : { pace: "Lauf " + rgN(1.0, 1.03), hf: "Rad " + rnd(rl * .94) + "–" + rnd(rl * .97) };
     default: return { pace: "", hf: "" };
   }
 }
@@ -1752,8 +1763,8 @@ function raceTargets(B, st, t) {
   const D = disciplines(B, st, t), R = derive(B, st), ev = B.S.events.filter(e => e.date >= t).sort((a, b) => a.date - b.date), out = [];
   const pos = (cur, goal) => { const slow = Math.max(cur, goal) * 1.06, fast = Math.min(cur, goal) * .97; return { cur: Math.max(0, Math.min(1, (slow - cur) / (slow - fast))), goal: Math.max(0, Math.min(1, (slow - goal) / (slow - fast))) }; };
   ev.slice(0, 2).forEach(e => { const rows = [];
-    if (/Frankfurt|HM/.test(e.name)) { const c = R.refHM, g = B.S.tgtHM; rows.push({ sport: "Lauf", lab: "Laufen · 21,1 km", range: mss(c * .99 / HMK) + "–" + mss(c * 1.01 / HMK) + " /km", est: "≈ " + hms(c * .99).replace(/:\d\d$/, "") + "–" + hms(c * 1.01).replace(/:\d\d$/, ""), goal: "Ziel " + hms(g), p: pos(c, g), ok: c <= g }); }
-    else if (/Linz|Marathon/.test(e.name)) { const P = progSpan(R, B.S), g = B.S.tgtM; rows.push({ sport: "Lauf", lab: "Laufen · 42,2 km", range: mss(P.opt / MK) + "–" + mss(P.kon / MK) + " /km", est: "≈ " + hms(P.opt).replace(/:\d\d$/, "") + "–" + hms(P.kon).replace(/:\d\d$/, ""), goal: "Ziel " + hms(g).replace(/:00$/, ""), p: pos(P.opt, g), ok: P.opt <= g }); }
+    if (/Frankfurt|HM/.test(e.name)) { const c = R.refHM, g = B.S.tgtHM; rows.push({ sport: "Lauf", lab: "Laufen · 21,1 km", range: mss(c * .99 / HMK) + "–" + mss(c * 1.01 / HMK) + " /km", est: "≈ " + hms(c * .99).replace(/:\d\d$/, "") + "–" + hms(c * 1.01).replace(/:\d\d$/, ""), goal: "Ziel " + hms(g), p: pos(c, g), ok: c <= g, cur: c, g, gap: c - g }); }
+    else if (/Linz|Marathon/.test(e.name)) { const P = progSpan(R, B.S), g = B.S.tgtM; rows.push({ sport: "Lauf", lab: "Laufen · 42,2 km", range: mss(P.opt / MK) + "–" + mss(P.kon / MK) + " /km", est: "≈ " + hms(P.opt).replace(/:\d\d$/, "") + "–" + hms(P.kon).replace(/:\d\d$/, ""), goal: "Ziel " + hms(g).replace(/:00$/, ""), p: pos(P.opt, g), ok: P.opt <= g, cur: P.opt, g, gap: P.opt - g }); }
     else D.filter(d => ["swim", "bike", "md", "od"].includes(d.key)).forEach(d => { if (num(d.cur) && num(d.goal)) rows.push({ sport: d.key === "swim" ? "Schwimmen" : d.key === "bike" ? "Rad" : "Triathlon", lab: d.lab, range: d.curTxt, est: d.pace || "", goal: "Ziel " + (d.goalTxt || hms(d.goal)), p: pos(d.cur, d.goal), ok: d.cur <= d.goal }); else rows.push({ sport: d.key === "swim" ? "Schwimmen" : d.key === "bike" ? "Rad" : "Triathlon", lab: d.lab, range: d.curTxt, est: "", goal: d.goalTxt ? "Ziel " + d.goalTxt : "", p: null }); });
     const tip = /Linz|Marathon/.test(e.name) ? "Die ersten 10 km am langsamen Ende der Spanne. Der Marathon beginnt bei km 30." : /Frankfurt|HM/.test(e.name) ? "Gleichmäßig anlaufen, ab km 15 darf es weh tun." : "Schwimmen ruhig, Rad nach Gefühl, den Lauf entscheidet die Verpflegung auf dem Rad.";
     out.push({ name: e.name, date: e.date, days: e.date - t, rows, tip }); });
@@ -1815,6 +1826,11 @@ function trackingChecks(B, st, t, E, nowMs) {
   if (!perf) push("info", "perf", "Prognose beruht noch auf deiner HM-Bestzeit vom April", nperf ? "Erster echter Leistungstest: " + nperf.name + " am " + wdD(nperf.date) + "." : "", nperf ? "test:" + nperf.key : null);
   let mc = 0; for (let d = t - 7; d < t; d++) if (val(st, "mc:" + d)) mc++;
   if (mc < 3) push("info", "mc", "Morgen-Check an " + mc + " von 7 Tagen", "Weil die App bei Rückstand nachlegt, braucht sie deine Signale. 10 Sekunden am Morgen reichen, Garmin füllt Schlaf und Ruhepuls.", "mc");
+  /* 6.1: Art des Checks, damit klar ist, ob jetzt etwas zu tun ist, ein Termin abgewartet wird oder die App nur beobachtet. */
+  const KIND = { open: "now", gar: "now", hfdata: "now", hf: "watch", jump: "watch", ramp: "watch", ld: "later", perf: "later", mc: "habit" };
+  out.forEach(o => { o.kind = o.lvl === "ok" ? "done" : KIND[o.key] || "now";
+    if (o.key === "lthr" && o.lvl !== "ok") { o.kind = o.lvl === "bad" ? "now" : "later"; if (lt) o.due = lt.date; }
+    if (o.key === "perf" && nperf) o.due = nperf.date; });
   const ord = { bad: 0, warn: 1, info: 2, ok: 3 }; return out.sort((a, b) => ord[a.lvl] - ord[b.lvl]);
 }
 
@@ -1849,6 +1865,58 @@ function badges(B, st, t, E) {
   ].map(b => Object.assign(b, { on: b.d != null }));
 }
 
+/* ---------- 6.1 Challenges mit Stufen (Bronze, Silber, Gold). Nur echte Einträge zählen. Zeiten: kleiner ist besser. ---------- */
+const TIER = ["Bronze", "Silber", "Gold"];
+function challenges(B, st, t, E) {
+  E = E || effective(B, st); const R = derive(B, st), sp5 = ["Lauf", "Rad", "Schwimmen", "Kraft", "Triathlon"];
+  const done = E.filter(s => s.date <= t && isTrain(s) && ["✓", "½"].includes(statusOf(st, s, t))), fr = freeList(st).filter(f => f.date <= t);
+  const runs = done.filter(s => s.sport === "Lauf").map(s => actual(st, s, t).km || 0).concat(fr.filter(f => f.sport === "Lauf").map(f => f.dist || 0));
+  const swims = done.filter(s => s.sport === "Schwimmen").map(s => actual(st, s, t).km || 0).concat(fr.filter(f => f.sport === "Schwimmen").map(f => f.dist || 0));
+  const hours = (done.reduce((a, s) => a + (actual(st, s, t).min || 0), 0) + fr.reduce((a, f) => a + (f.dur || 0), 0)) / 60;
+  const S = streaks(B, st, t, E), cw = weekOf(B, t);
+  const easyOk = E.filter(s => s.date <= t && s.sport === "Lauf" && ["E", "LR"].includes(s.code) && statusOf(st, s, t) === "✓" && num((val(st, "log:" + s.id) || {}).hf) && val(st, "log:" + s.id).hf <= easyCap(B, R, s.w)).length;
+  const kraft = done.filter(s => s.sport === "Kraft").length + fr.filter(f => f.sport === "Kraft").length;
+  const mcN = Object.keys(st).filter(k => /^mc:\d+$/.test(k) && val(st, k)).length;
+  let full = 0; for (let w = 1; w < cw; w++) { const f0 = B.S.start + 7 * (w - 1), A = E.filter(s => s.date >= f0 && s.date <= f0 + 6 && isTrain(s) && sp5.includes(s.sport) && !sickOn(st, s.date, t)); if (A.length && A.every(s => ["✓", "½", "krank"].includes(statusOf(st, s, t)))) full++; }
+  const tt = typ => B.tests.filter(x => x.typ === typ && x.date <= t).map(x => (val(st, "test:" + x.key) || {}).time).filter(num), best = a => a.length ? Math.min(...a) : null;
+  const de1 = v => String(r1(v)).replace(".", ","), hm = v => hms(v).replace(/^0:/, ""), mi = v => hms(v).replace(/^0:/, "");
+  const C = [
+    { k: "t10", cat: "Rennen", lab: "10-km-Zeit", lower: true, cur: best(tt("10K")), lv: [45, 43, 41].map(m => m / 1440), f: mi,
+      what: "Deine beste Zeit in einem 10-km-Test oder -Rennen.", why: "Der 10-km-Test ist der ehrlichste Formcheck vor Linz. Gold mit 41:00 entspricht nach Riegel einer Marathonform von etwa 3:09." },
+    { k: "thm", cat: "Rennen", lab: "Halbmarathon", lower: true, cur: best(tt("HM")), lv: [95, 92, B.S.tgtHM * 1440].map(m => m / 1440), f: hm,
+      what: "Deine Zeit beim HM Frankfurt.", why: "Frankfurt ist die Generalprobe. Unter 1:30 ist die Eintrittskarte für 3:09 in Linz." },
+    { k: "tm", cat: "Rennen", lab: "Marathon Linz", lower: true, cur: best(tt("M")), lv: [6 / 24, 195 / 1440, B.S.tgtM], f: hm, lvLab: ["Finish", null, null],
+      what: "Deine Zeit beim Marathon Linz.", why: "Das Hauptziel der Saison. Bronze heißt ankommen, Silber unter 3:15, Gold ist dein Ziel 3:09." },
+    { k: "tri", cat: "Rennen", lab: "Triathlet", cur: (B.tests.some(x => x.typ === "OD" && x.date <= t && num((val(st, "test:" + x.key) || {}).time)) ? 1 : 0) + (B.tests.some(x => x.typ === "MD" && x.date <= t && num((val(st, "test:" + x.key) || {}).time)) ? 1 : 0) + (best(tt("MD")) != null && best(tt("MD")) < 5 / 24 ? 1 : 0), lv: [1, 2, 3], f: v => v + " von 3", lvLab: ["OD gefinisht", "Allgäu gefinisht", "Allgäu unter 5 h"],
+      what: "Deine ersten Triathlons: Olympische Distanz München und Allgäu Classic.", why: "Vom Nichtschwimmer zum Mitteldistanz-Finisher in einer Saison. Unter 5 Stunden im Allgäu ist die Kür." },
+    { k: "lr", cat: "Ausdauer", lab: "Long-Run-Leiter", cur: Math.max(0, ...runs), lv: [21.1, 30, 35], f: v => de1(v) + " km",
+      what: "Dein längster Lauf am Stück.", why: "Der Marathon beginnt bei km 30. Wer 35 km im Training gelaufen ist, kennt den Mann mit dem Hammer schon." },
+    { k: "km", cat: "Ausdauer", lab: "Kilometerfresser", cur: runs.reduce((a, b) => a + b, 0), lv: [250, 500, 1000], f: v => Math.round(v).toLocaleString("de-DE") + " km",
+      what: "Gelaufene Kilometer seit Planstart.", why: "Umfang ist der größte Hebel für die Marathonzeit. 1.000 km bis Linz sind ein starkes Fundament." },
+    { k: "sw", cat: "Ausdauer", lab: "Wasserratte", cur: Math.max(0, ...swims), lv: [1, 1.9, 3], f: v => Math.round(v * 1000).toLocaleString("de-DE") + " m",
+      what: "Deine längste Schwimmeinheit.", why: "Schwimmen ist deine schwächste Disziplin. 1.900 m sind die Allgäu-Distanz, 3.000 m geben Reserve für den Ironman 2028." },
+    { k: "h", cat: "Ausdauer", lab: "Stundenkonto", cur: hours, lv: [100, 200, 300], f: v => Math.round(v) + " h",
+      what: "Trainingsstunden seit Planstart, alle Sportarten.", why: "Bei 8 bis 10 Stunden pro Woche sind 300 Stunden rund acht Monate Konstanz. Die schlägt jedes Wunder-Training." },
+    { k: "st", cat: "Disziplin", lab: "Unaufhaltsam", cur: S.best, lv: [7, 14, 30], f: v => v + " Tage",
+      what: "Trainingstage in Folge, an denen alles Geplante erledigt war. Ruhetage unterbrechen nicht.", why: "Gewohnheit schlägt Motivation. Nach 30 Tagen fragst du nicht mehr, ob du trainierst." },
+    { k: "iw", cat: "Disziplin", lab: "Eiserne Woche", cur: full, lv: [1, 4, 10], f: v => v + (v === 1 ? " Woche" : " Wochen"),
+      what: "Wochen, in denen jede geplante Einheit erledigt war. Krankheitstage zählen nicht dagegen.", why: "Eine komplette Woche ist selten. Zehn davon trennen Finisher von Zielzeit-Läufern." },
+    { k: "ks", cat: "Disziplin", lab: "Schlüssel-Serie", cur: S.wk, lv: [4, 8, 12], f: v => v + (v === 1 ? " Woche" : " Wochen"),
+      what: "Wochen am Stück mit allen Schlüsseleinheiten (die mit Stern).", why: "Die Schlüsseleinheiten bringen den Reiz. Zwölf Wochen in Serie sind ein kompletter Marathonblock." },
+    { k: "ez", cat: "Disziplin", lab: "Wirklich locker", cur: easyOk, lv: [10, 25, 50], f: v => v + " Läufe",
+      what: "Lockere Läufe und Long Runs mit Durchschnittspuls im Puls-Deckel (" + easyCap(B, R, cw) + " bpm).", why: "Rund 80 % locker ist das Muster der Besten. Die schwerste Disziplin ist, langsam zu bleiben." },
+    { k: "kr", cat: "Disziplin", lab: "Bulletproof", cur: kraft, lv: [10, 25, 50], f: v => v + " Einheiten",
+      what: "Erledigte Krafteinheiten.", why: "Kraft schützt Hallux und Achillessehne und macht den Laufstil ökonomischer." },
+    { k: "mc", cat: "Disziplin", lab: "Morgenmensch", cur: mcN, lv: [7, 30, 90], f: v => v + " Checks",
+      what: "Tage mit Morgen-Check.", why: "Die App passt den Plan an deine Signale an. Ohne Morgen-Check fährt sie blind." }
+  ];
+  return C.map(c => { const ok = v => c.cur != null && (c.lower ? c.cur <= v + 1e-9 : c.cur >= v - 1e-9), level = c.lv.filter(ok).length, nx = level < 3 ? c.lv[level] : null;
+    const p = level === 3 ? 1 : c.lower ? null : Math.max(0, Math.min(1, (c.cur || 0) / nx));
+    return { k: c.k, cat: c.cat, lab: c.lab, what: c.what, why: c.why, level, tier: level ? TIER[level - 1] : "", p, cur: c.cur, lower: !!c.lower,
+      curTxt: c.cur == null || (c.lower && !c.cur) ? "noch kein Wert" : c.f(c.cur), nextTxt: nx == null ? "" : (c.lvLab && c.lvLab[level]) || (c.lower ? "unter " : "") + c.f(nx),
+      lv: c.lv.map((v, i) => ({ tier: TIER[i], txt: (c.lvLab && c.lvLab[i]) || (c.lower ? "unter " : "") + c.f(v), on: ok(v) })) }; });
+}
+
 /* ---------- 6.0 Wochen im Überblick für klickbare Diagramme ---------- */
 function weeksOverview(B, st, t, E, w0, w1) {
   E = E || effective(B, st); const sp = ["Lauf", "Rad", "Schwimmen", "Kraft", "Triathlon"], fr = freeList(st), out = [];
@@ -1862,6 +1930,6 @@ function weeksOverview(B, st, t, E, w0, w1) {
   return out;
 }
 
-G.Engine = { weeksOverview, streaks, badges, loadCap, goalPath, trackingChecks, weekFocus, weekReview, raceTargets, chatIntent, hText, workoutTake, goalStatus, intentOf, gExtra, freeHard, FREE_HARD_LOAD, healthDays, rollMean, bandOf, healthInsights, H_KEYS, garminNormalize, garminApply, hrvSignal, gSport, painLvl, sportSummary, parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
+G.Engine = { challenges, TIER, weeksOverview, streaks, badges, loadCap, goalPath, trackingChecks, weekFocus, weekReview, raceTargets, chatIntent, hText, workoutTake, goalStatus, intentOf, gExtra, freeHard, FREE_HARD_LOAD, healthDays, rollMean, bandOf, healthInsights, H_KEYS, garminNormalize, garminApply, hrvSignal, gSport, painLvl, sportSummary, parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
   util: { timeRange, hhmm, sd, serialOf, fmtD, wdD, mss, hms, r1, WD, WDL, tStart, RACE_TYPES, stageOf } };
 })(typeof window !== "undefined" ? window : globalThis);

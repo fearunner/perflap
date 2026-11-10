@@ -1,4 +1,13 @@
-# Gehhilfe 6.0: Klick-Anleitung
+# Gehhilfe 6.1: Klick-Anleitung
+
+## Neu in 6.1
+
+- **Konkrete Pace bei jeder Einheit:** Statt „gleichmäßig, voll“ steht jetzt eine Pace in min/km da. Tests, Aerob-Check und Steigerungen richten sich nach deiner aktuellen Form (letzter Test, sonst Bestzeit vom April), die übrigen Läufe nach der Planstufe. Beim Aerob-Check gibt der Puls (145) den Takt vor, die Pace dahinter ist die erwartete Spanne.
+- **Schwimmen mit Pace:** Bis zum CSS-Test schätzt die App deine Pace aus deinen letzten Schwimmeinträgen (gekennzeichnet als „geschätzt“). Nach dem CSS-Test gilt der Testwert. Drills bleiben bewusst ohne Uhr.
+- **Rad:** weiter Puls-Bereich plus Gefühl. Ohne Wattmesser hängt das Tempo zu stark von Strecke und Wind ab.
+- **Fortschritt in Reitern:** Rückblick, Ziel, Training, Challenges, Checks, Werte. Die Leiste scrollt auf dem iPhone seitlich, der rechte Rand blendet aus, damit man sieht, dass noch mehr kommt.
+- **„Passt heute was nicht?“** ist kein Eingabefeld mehr, sondern sechs Knöpfe (Nur 30 min, Bin platt, Lieber morgen, Kein Gym, Krank, Dienstreise). Opa schlägt dann vor, geändert wird erst nach deinem OK.
+- **Challenges** mit Bronze, Silber, Gold und Erklärung pro Challenge (antippen). **Checks** sind sortiert nach „Jetzt erledigen“, „Jeden Morgen“, „Kommt mit Termin“, „Beobachtet die App“.
 
 ## Neu in 6.0
 

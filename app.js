@@ -345,12 +345,12 @@ function vHeute(c) {
   // Offene Einträge
   if (open.length) x += `<div class="openbar"><div class="tx"><b>${open.length} ${open.length === 1 ? "Einheit" : "Einheiten"} offen</b><span>${esc(open.slice(0, 3).map(s => U.WD[U.sd(s.date).getUTCDay()] + " " + s.name.replace(/^★\s*/, "")).join(", "))}${open.length > 3 ? " …" : ""}</span></div><span class="bt"><button class="btn sm" data-act="review">Ansehen</button><button class="btn sm ink" data-act="allok">${ui("check")}Alle erledigt</button></span></div>`;
   // 4.4: Was sich geändert hat (nur neue automatische Anpassungen), offene Vorschläge, Ringe, Heute und morgen, Körper, Termine
+  x += weekReviewCard(c);
   x += goalHTML;
   x += weekCard(c);
   x += nutTip(c);
   x += ringsBlock(c);
   x += lastTake(c);
-  x += weekReviewCard(c);
   x += changedBlock(c);
   x += LP.map((p, i) => propCard(p, i, "")).join("");
   x += dashGrid(c, h);
@@ -376,12 +376,15 @@ function chartCard(c) {
     const val = o => PCH === "std" ? [o.plan / 60, o.done / 60] : [o.nPlan, o.nDone], mx = Math.max(PCH === "std" ? 10 : 6, ...W.map(o => Math.max(...val(o)))) * 1.08, y = v => T + (1 - v / mx) * (H - T - Bt);
     const grid = (PCH === "std" ? [2, 4, 6, 8, 10] : [2, 4, 6]).filter(v => v < mx);
     svg += grid.map(v => `<line x1="${L}" x2="${Wd2 - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" class="cg"/><text x="${L - 5}" y="${(y(v) + 3).toFixed(1)}" class="cy">${v}${PCH === "std" ? " h" : ""}</text>`).join("");
-    if (PCH === "std") svg += `<rect x="${L}" width="${Wd2 - L - R}" y="${y(10).toFixed(1)}" height="${(y(8) - y(10)).toFixed(1)}" class="cband"/>`;
-    W.forEach((o, i) => { const [p0, d0] = val(o), x0 = xb(i) + bw * .18, w0 = bw * .64;
-      svg += `<g class="cbar${o.cur ? " cur" : ""}" data-act="wkdet" data-v="${o.w}" role="button" aria-label="Woche ${o.w}: ${PCH === "std" ? de(d0) + " von " + de(p0) + " Stunden" : d0 + " von " + p0 + " Einheiten"}"><rect x="${xb(i).toFixed(1)}" y="${T}" width="${bw.toFixed(1)}" height="${H - T - Bt + 18}" class="chit"/><rect x="${x0.toFixed(1)}" y="${y(p0).toFixed(1)}" width="${w0.toFixed(1)}" height="${(y(0) - y(p0)).toFixed(1)}" rx="3" class="cplan"/>`;
-      if (PCH === "std" && (o.past || o.cur)) { let acc = 0; ["Lauf", "Rad", "Schwimmen", "Kraft", "Triathlon", "Sonstiges"].forEach(k => { const v = (o.by[k] || 0) / 60; if (!v) return; svg += `<rect x="${x0.toFixed(1)}" y="${y(acc + v).toFixed(1)}" width="${w0.toFixed(1)}" height="${(y(acc) - y(acc + v)).toFixed(1)}" style="fill:${sp(k).c}"/>`; acc += v; }); }
-      else if (o.past || o.cur) svg += `<rect x="${x0.toFixed(1)}" y="${y(d0).toFixed(1)}" width="${w0.toFixed(1)}" height="${(y(0) - y(d0)).toFixed(1)}" rx="3" class="cdone"/>`;
-      svg += `<text x="${(xb(i) + bw / 2).toFixed(1)}" y="${H - 8}" class="cx">${o.cur ? "jetzt" : "W" + o.w}</text></g>`; });
+    if (PCH === "std") svg += `<rect x="${L}" width="${Wd2 - L - R}" y="${y(10).toFixed(1)}" height="${(y(8) - y(10)).toFixed(1)}" class="cband"/><line x1="${L}" x2="${Wd2 - R}" y1="${y(8).toFixed(1)}" y2="${y(8).toFixed(1)}" class="cbline"/><line x1="${L}" x2="${Wd2 - R}" y1="${y(10).toFixed(1)}" y2="${y(10).toFixed(1)}" class="cbline"/><text x="${Wd2 - R}" y="${(y(10) - 4).toFixed(1)}" class="cbl">Ziel 8–10 h</text>`;
+    W.forEach((o, i) => { const [p0, d0] = val(o), x0 = xb(i) + bw * .22, w0 = bw * .56, rr = Math.min(6, w0 / 2), cx0 = xb(i) + bw / 2, on = o.past || o.cur;
+      svg += `<g class="cbar${o.cur ? " cur" : ""}${on ? "" : " fut"}" data-act="wkdet" data-v="${o.w}" role="button" aria-label="Woche ${o.w}: ${PCH === "std" ? de(d0) + " von " + de(p0) + " Stunden" : d0 + " von " + p0 + " Einheiten"}">${o.cur ? `<rect x="${(xb(i) + 1.5).toFixed(1)}" y="${T - 8}" width="${(bw - 3).toFixed(1)}" height="${H - T - Bt + 12}" rx="10" class="ccur"/>` : ""}<rect x="${xb(i).toFixed(1)}" y="${T}" width="${bw.toFixed(1)}" height="${H - T - Bt + 18}" class="chit"/>`;
+      if (p0 > 0) svg += `<rect x="${x0.toFixed(1)}" y="${y(p0).toFixed(1)}" width="${w0.toFixed(1)}" height="${(y(0) - y(p0)).toFixed(1)}" rx="${rr.toFixed(1)}" class="cplan"/>`;
+      if (on && d0 > 0) { svg += `<clipPath id="cc${o.w}"><rect x="${x0.toFixed(1)}" y="${y(d0).toFixed(1)}" width="${w0.toFixed(1)}" height="${(y(0) - y(d0)).toFixed(1)}" rx="${rr.toFixed(1)}"/></clipPath><g clip-path="url(#cc${o.w})">`;
+        if (PCH === "std") { let acc = 0; ["Lauf", "Rad", "Schwimmen", "Kraft", "Triathlon", "Sonstiges"].forEach(k => { const v = (o.by[k] || 0) / 60; if (!v) return; svg += `<rect x="${x0.toFixed(1)}" y="${y(acc + v).toFixed(1)}" width="${w0.toFixed(1)}" height="${(y(acc) - y(acc + v)).toFixed(1)}" style="fill:${sp(k).c}"/>`; acc += v; }); }
+        else svg += `<rect x="${x0.toFixed(1)}" y="${y(d0).toFixed(1)}" width="${w0.toFixed(1)}" height="${(y(0) - y(d0)).toFixed(1)}" class="cdone"/>`;
+        svg += `</g><text x="${cx0.toFixed(1)}" y="${(Math.min(y(d0), y(p0)) - 4).toFixed(1)}" class="cv">${PCH === "std" ? de(d0) : d0}</text>`; }
+      svg += o.cur ? `<text x="${cx0.toFixed(1)}" y="${H - 8}" class="cx cxn">jetzt</text></g>` : `<text x="${cx0.toFixed(1)}" y="${H - 8}" class="cx">W${o.w}</text></g>`; });
     const past = W.filter(o => o.past), avg = past.length ? past.reduce((a, o) => a + (PCH === "std" ? o.done / 60 : o.nDone), 0) / past.length : 0;
     sum = PCH === "std" ? `Ø ${de(avg)} h pro Woche in den letzten ${past.length} Wochen · Ziel 8 bis 10 h` : `Ø ${de(avg)} Einheiten pro Woche · geplant ${de(past.reduce((a, o) => a + o.nPlan, 0) / Math.max(1, past.length))}`;
     leg = PCH === "std" ? `<span><i style="background:var(--run)"></i>Lauf</span><span><i style="background:var(--bike)"></i>Rad</span><span><i style="background:var(--swim)"></i>Schwimmen</span><span><i style="background:var(--gym)"></i>Kraft</span><span><i class="pl"></i>Plan</span>` : `<span><i class="pl"></i>geplant</span><span><i style="background:var(--navy)"></i>erledigt</span>`;
@@ -418,24 +421,34 @@ function weekDetail(D) {
 UI.flame = '<path d="M12 3c1 3.5 4.5 5.2 4.5 9.6A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.4c0-2.2 1.2-3.4 2.2-4.6.2 1.6 1 2.6 2 3 0-3 .3-5.6.3-8z"/><path d="M8 20h8"/>';
 UI.medal = '<circle cx="12" cy="14" r="5"/><path d="M8.5 3h7L13 9.4M8.5 3 11 9.4"/><path d="M12 12.3v3.4"/>';
 function streakChip(c) { if (c.pre) return ""; const S = E.streaks(B, ST, c.t, c.Ex), late = S.openToday && nowMin() >= 18 * 60;
-  return `<button class="streak${S.day ? " on" : ""}${late ? " late" : ""}" data-tab="fort" aria-label="Serie ${S.day} Tage${late ? ", heute noch offen" : ""}">${ui("flame")}<b class="num">${S.day}</b><span>${late ? "heute offen" : S.day === 1 ? "Tag" : "Tage"}</span></button>`; }
+  return `<button class="streak${S.day ? " on" : ""}${late ? " late" : ""}" data-tab="fort" data-sub="chl" aria-label="Serie ${S.day} Tage${late ? ", heute noch offen" : ""}">${ui("flame")}<b class="num">${S.day}</b><span>${late ? "heute offen" : S.day === 1 ? "Tag" : "Tage"}</span></button>`; }
 function confetti(big) {
   if (REDUCED()) return; const box = document.createElement("div"); box.className = "confetti" + (big ? " big" : ""); const cols = ["#FD6E88", "#072D59", "#5FA8D3", "#F5C451", "#DBF2FC"];
   for (let i = 0; i < (big ? 70 : 36); i++) { const p0 = document.createElement("i"); p0.style.cssText = `--x:${(Math.random() * 2 - 1) * (big ? 260 : 170)}px;--y:${-(120 + Math.random() * (big ? 360 : 220))}px;--r:${Math.random() * 720 - 360}deg;--d:${(.8 + Math.random() * .7).toFixed(2)}s;background:${cols[i % cols.length]};left:${45 + Math.random() * 10}%`; box.appendChild(p0); }
   document.body.prepend(box); setTimeout(() => box.remove(), 1800); }
 function cheer(beforeBadges, beforeWeek, s) {
-  const c = C(), S = E.streaks(B, ST, c.t, c.Ex), W = s ? c.WS.weeks[s.w - 1] : null, nb = E.badges(B, ST, c.t, c.Ex).filter(b => b.on && !beforeBadges.has(b.k));
+  const c = C(), S = E.streaks(B, ST, c.t, c.Ex), W = s ? c.WS.weeks[s.w - 1] : null, nb = E.challenges(B, ST, c.t, c.Ex).flatMap(b => b.lv.filter(l => l.on && !beforeBadges.has(b.k + ":" + l.tier)).map(l => ({ lab: b.lab + " " + l.tier })));
   const weekDone = W && beforeWeek && W.keyTot && W.keyDone === W.keyTot && beforeWeek.keyDone < beforeWeek.keyTot;
   confetti(weekDone || nb.length > 0); buzz(weekDone ? 40 : 15);
-  if (nb.length) return "Abzeichen: " + nb[0].lab + "!";
+  if (nb.length) return "Challenge: " + nb[nb.length - 1].lab + "!";
   if (weekDone) return "Woche " + W.w + ": alle Schlüsseleinheiten. Stark!";
   return S.todayDone ? (S.day > 1 ? "Erledigt. Serie: " + S.day + " Tage" : "Erledigt. Die Serie beginnt.") : "Erledigt. Heute noch " + S.openToday + " offen.";
 }
-const badgeSet = () => new Set(E.badges(B, ST, today(), C().Ex).filter(b => b.on).map(b => b.k));
+const badgeSet = () => new Set(E.challenges(B, ST, today(), C().Ex).flatMap(b => b.lv.filter(l => l.on).map(l => b.k + ":" + l.tier)));
 function badgeCard(c) {
-  const Bd = E.badges(B, ST, c.t, c.Ex), S = E.streaks(B, ST, c.t, c.Ex), n = Bd.filter(b => b.on).length;
-  return `<section class="bdg" aria-label="Serie und Abzeichen"><div class="bdg-h"><div><span class="gk">Serie und Abzeichen</span><h3>${n} von ${Bd.length} geschafft</h3></div></div><div class="bdg-s"><div><b class="num">${S.day}</b><span>Tage Serie</span></div><div><b class="num">${S.best}</b><span>Bestwert</span></div><div><b class="num">${S.wk}</b><span>Wochen stark</span></div></div>
-   <div class="bdg-g">${Bd.map(b => `<div class="bdgx ${b.on ? "on" : ""}" title="${esc(b.desc)}"><span class="bdgx-ic">${ui("medal")}</span><b>${esc(b.lab)}</b><small>${b.on ? esc(U.fmtD(b.d)) : b.p != null ? Math.round(b.p * 100) + " %" : esc(b.desc)}</small>${!b.on && b.p != null ? `<i style="width:${Math.round(b.p * 100)}%"></i>` : ""}</div>`).join("")}</div></section>`;
+  const CH = E.challenges(B, ST, c.t, c.Ex), S = E.streaks(B, ST, c.t, c.Ex), n = CH.reduce((a, x) => a + x.level, 0);
+  const card = x => `<button class="chl t${x.level}" data-act="chl" data-v="${x.k}" aria-label="${esc(x.lab)}: ${x.level ? x.tier : "noch keine Stufe"}. ${esc(x.curTxt)}"><span class="chl-ic">${ui("medal")}</span><span class="chl-tx"><b>${esc(x.lab)}</b><span>${x.level === 3 ? "Gold geschafft" : "Nächste Stufe: " + esc(x.nextTxt)}</span>${x.p != null && x.level < 3 ? `<i class="chl-p"><i style="width:${Math.round(x.p * 100)}%"></i></i>` : ""}<small>${esc(x.curTxt)}</small></span><span class="chl-dots" aria-hidden="true">${[0, 1, 2].map(i => `<i class="${i < x.level ? "on" : ""}"></i>`).join("")}</span></button>`;
+  return `<section class="bdg" aria-label="Challenges"><div class="bdg-hero"><div><span class="gk">Challenges</span><h3>${n} von ${CH.length * 3} Stufen</h3><p>Jede Challenge hat Bronze, Silber und Gold. Antippen für Regeln und warum sie zählt.</p></div>
+    <div class="bdg-s"><div><b class="num">${S.day}</b><span>Tage Serie</span></div><div><b class="num">${S.best}</b><span>Bestwert</span></div><div><b class="num">${S.wk}</b><span>Wochen stark</span></div></div></div>
+   ${["Rennen", "Ausdauer", "Disziplin"].map(k => `<div class="chl-g"><h4>${k}</h4><div class="chl-l">${CH.filter(x => x.cat === k).map(card).join("")}</div></div>`).join("")}</section>`;
+}
+function chlSheet(D) {
+  const x = E.challenges(B, ST, today(), C().Ex).find(o => o.k === D.k); if (!x) return "";
+  return `<div class="sh-head"><span class="chl-ic big t${x.level}">${ui("medal")}</span><div class="tx"><h2 class="sheet-title" tabindex="-1">${esc(x.lab)}</h2><p>${x.level ? esc(x.tier) + " erreicht" : "Noch keine Stufe"} · ${esc(x.curTxt)}</p></div><button class="closebtn" data-act="close" aria-label="Schließen">${ui("x")}</button></div>
+   <div class="chl-sec"><h4>Was zählt</h4><p>${esc(x.what)}</p></div><div class="chl-sec"><h4>Warum das wichtig ist</h4><p>${esc(x.why)}</p></div>
+   <div class="chl-lv">${x.lv.map(l => `<div class="${l.on ? "on" : ""} ${l.tier.toLowerCase()}"><span class="chl-ic sm">${ui(l.on ? "check" : "medal")}</span><b>${esc(l.tier)}</b><span>${esc(l.txt)}</span></div>`).join("")}</div>
+   ${x.p != null && x.level < 3 ? `<p class="note">Zur nächsten Stufe: ${Math.round(x.p * 100)} %. Gezählt wird nur, was du eingetragen hast oder was von Garmin kommt.</p>` : `<p class="note">Gezählt wird nur, was du eingetragen hast oder was von Garmin kommt.</p>`}
+   <div class="sh-foot"><button class="btn ink" data-act="close">Fertig</button></div>`;
 }
 /* ---------- 5.3 Leistungsdiagnostik (Sportmedizin) ---------- */
 function ldSheet(D) {
@@ -454,31 +467,34 @@ function ldSheet(D) {
 const hm5 = v => U.hms(v).replace(/:\d\d$/, ""), minDiff = v => { const m = Math.round(Math.abs(v) * 1440 * 10) / 10; return (m >= 1 ? de(m) + " min" : Math.round(Math.abs(v) * 86400) + " s"); };
 function pathCard(c) {
   const G = E.goalPath(B, ST, c.t, c.Ex); if (!G) return "";
-  const W = 340, Hh = 150, L = 34, Rr = 12, T = 14, Bt = 22, x = d => L + (d - G.s0) / (G.d1 - G.s0) * (W - L - Rr);
-  const vals = [G.p0, G.p1, G.now, ...G.pts.map(p => p.v)], lo = Math.min(...vals) - 2 / 1440, hi = Math.max(...vals) + 2 / 1440, y = v => T + (v - lo) / (hi - lo) * (Hh - T - Bt);
-  const act = [[G.s0, G.p0], ...G.pts.map(p => [p.d, p.v]), [c.t, G.now]], ticks = []; for (let m = Math.ceil(lo * 1440 / 5) * 5; m <= hi * 1440; m += 5) ticks.push(m / 1440);
-  const svg = `<svg class="gpath" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Prognose heute ${hm5(G.now)}, Soll heute ${hm5(G.sNow)}, Ziel ${hm5(G.p1)}">
-    ${ticks.map(v => `<line x1="${L}" x2="${W - Rr}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" class="gl"/><text x="${L - 6}" y="${(y(v) + 3).toFixed(1)}" class="gy">${hm5(v)}</text>`).join("")}
-    <line x1="${x(G.s0)}" y1="${y(G.p0).toFixed(1)}" x2="${x(G.d1)}" y2="${y(G.p1).toFixed(1)}" class="gs"/>
-    <polyline points="${act.map(([d, v]) => x(d).toFixed(1) + "," + y(v).toFixed(1)).join(" ")}" class="ga"/>
-    <line x1="${x(c.t).toFixed(1)}" x2="${x(c.t).toFixed(1)}" y1="${T - 6}" y2="${Hh - Bt + 4}" class="gt"/><text x="${x(c.t).toFixed(1)}" y="${Hh - 6}" class="gx" text-anchor="middle">heute</text>
-    ${G.pts.map(p => `<circle cx="${x(p.d).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4" class="gpt"><title>${esc(p.name)}: ${hm5(p.v)}</title></circle>`).join("")}
-    <circle cx="${x(c.t).toFixed(1)}" cy="${y(G.now).toFixed(1)}" r="6" class="gnow"/><circle cx="${x(c.t).toFixed(1)}" cy="${y(G.sNow).toFixed(1)}" r="4" class="gsoll"/>
-    <rect x="${(x(G.d1) - 6).toFixed(1)}" y="${(y(G.p1) - 6).toFixed(1)}" width="12" height="12" transform="rotate(45 ${x(G.d1).toFixed(1)} ${y(G.p1).toFixed(1)})" class="gz"/>
-    <text x="${L}" y="${Hh - 6}" class="gx">Start</text><text x="${W - 2}" y="${Hh - 6}" class="gx" style="text-anchor:end">${esc(G.race.replace("Marathon ", ""))}</text></svg>`;
-  const st = G.behind > 1 / 1440 ? ["warn", minDiff(G.behind) + " hinter der Soll-Linie"] : G.behind < -1 / 1440 ? ["ok", minDiff(G.behind) + " vor der Soll-Linie"] : ["ok", "auf der Soll-Linie"];
-  const need = G.need ? `Nächster Beweis: <b>${esc(G.need.name)}</b> am ${esc(U.wdD(G.need.d))} in <b>${esc(G.need.typ === "10K" ? U.mss(G.need.v) : hm5(G.need.v))}</b> oder schneller.` : "";
-  const dC = Math.round(G.ctl.now - G.ctl.plan);
-  return `<section class="pathc" aria-label="Dein Weg nach ${esc(G.race)}"><div class="pathc-h"><div><span class="gk">Dein Weg nach ${esc(G.race.replace("Marathon ", ""))} · noch ${G.days} Tage</span><h3>Marathon-Prognose</h3></div><span class="chip-st ${st[0]}">${esc(st[1])}</span></div>
-   ${svg}<div class="pathc-k"><div><span>Heute</span><b>${hm5(G.now)}</b></div><div><span>Soll heute</span><b>${hm5(G.sNow)}</b></div><div class="z"><span>Ziel</span><b>${hm5(G.p1)}</b></div></div>
-   <p class="pathc-t">${G.tested ? "" : "Seit Planstart gab es noch keinen Leistungstest. Die Prognose ist deshalb deine Bestzeit vom April, kein neuer Messwert. "}${need}</p>
-   <div class="pathc-f"><span>Fitness (CTL)</span><b>${Math.round(G.ctl.now)}</b><span>laut Plan heute ${Math.round(G.ctl.plan)}</span><span class="${dC < -2 ? "neg" : "pos"}">${dC > 0 ? "+" : ""}${dC}</span><span class="pathc-fr">Renntag laut Plan ${Math.round(G.ctl.racePlan)}</span></div></section>`;
+  const span = G.p0 - G.p1 || 1 / 1440, pos = v => Math.max(0, Math.min(1, (G.p0 - v) / span)), gapM = Math.round((G.now - G.p1) * 1440);
+  const st = G.behind > 1 / 1440 ? ["warn", minDiff(G.behind) + " hinter Soll"] : G.behind < -1 / 1440 ? ["ok", minDiff(G.behind) + " vor Soll"] : ["ok", "im Soll"];
+  const pn = pos(G.now), ps = pos(G.sNow), dC = Math.round(G.ctl.now - G.ctl.plan), race = G.race.replace("Marathon ", "");
+  const need = G.need ? `<div class="gh-next"><span class="gk">Nächster Beweis</span><b>${esc(G.need.name)}</b><span>${esc(U.wdD(G.need.d))} · Zielzeit <b>${esc(G.need.typ === "10K" ? U.mss(G.need.v) : hm5(G.need.v))}</b> oder schneller</span></div>` : "";
+  return `<section class="gh" aria-label="Ziel ${esc(G.race)}: heute ${hm5(G.now)}, Ziel ${hm5(G.p1)}">
+   <div class="gh-top"><span>Marathon ${esc(race)} · noch ${G.days} Tage</span><span class="gh-st ${st[0]}">${esc(st[1])}</span></div>
+   <div class="gh-nums"><div class="gh-is"><span>Heute</span><b class="num">${hm5(G.now)}</b></div>
+    <div class="gh-gap">${gapM > 0 ? `<b class="num">${gapM}</b><span>min fehlen</span>` : `<b>${ui("check")}</b><span>Ziel erreicht</span>`}</div>
+    <div class="gh-goal"><span>Ziel</span><b class="num">${hm5(G.p1)}</b></div></div>
+   <div class="gh-bar" role="img" aria-label="Weg vom Start zum Ziel: ${Math.round(pn * 100)} Prozent geschafft, Soll heute ${Math.round(ps * 100)} Prozent">
+    <div class="gh-sl"><span style="left:${Math.max(16, Math.min(84, ps * 100)).toFixed(1)}%">Soll heute ${hm5(G.sNow)}</span></div>
+    <div class="gh-tr"><i class="f" style="width:${(pn * 100).toFixed(1)}%"></i><i class="s" style="left:${(ps * 100).toFixed(1)}%"></i></div>
+    <div class="gh-lb"><span>Start ${hm5(G.p0)}</span><span>Ziel ${hm5(G.p1)}</span></div></div>
+  </section>
+  <section class="gh2">${need}${G.tested ? "" : `<p class="gh-note">Seit Planstart gab es noch keinen Leistungstest. „Heute“ ist deshalb deine Bestzeit vom April, kein neuer Messwert. Der Balken bewegt sich erst mit dem ersten Test.</p>`}
+   <div class="gh-ctl"><div><span>Fitness heute</span><b class="num">${Math.round(G.ctl.now)}</b></div><div><span>Plan heute</span><b class="num">${Math.round(G.ctl.plan)}</b><small class="${dC < -2 ? "neg" : "pos"}">${dC > 0 ? "+" : ""}${dC}</small></div><div><span>Plan Renntag</span><b class="num">${Math.round(G.ctl.racePlan)}</b></div></div>
+   <button class="lnkbtn gh-info" data-act="info" data-v="prog">Wie wird das berechnet?</button></section>`;
 }
 function checksCard(c, compact) {
-  const K = E.trackingChecks(B, ST, c.t, c.Ex, Date.now()), openK = K.filter(k => k.lvl !== "ok"); if (compact) return openK.length;
-  const btn = k => !k.act ? "" : k.act === "review" ? `<button class="btn sm" data-act="review">Nachtragen</button>` : k.act === "garmin" ? `<button class="btn sm" data-act="garmin">Garmin holen</button>` : k.act === "mc" ? `<button class="btn sm" data-act="mc" data-v="${c.t}">Morgen-Check</button>` : k.act === "ld" ? `<button class="btn sm" data-act="ld">Eintragen</button>` : /^test:/.test(k.act) ? `<button class="btn sm" data-act="test" data-k="${esc(k.act.slice(5))}">Eintragen</button>` : "";
-  const okK = K.filter(k => k.lvl === "ok");
-  return `<section class="chk" aria-label="Checks für ein realistisches Tracking"><div class="chk-h"><h3>Checks</h3><span>${openK.length ? openK.length + " offen" : "alles im grünen Bereich"}</span></div>${okK.length ? `<p class="chk-ok">${ui("check")}${okK.map(k => esc(k.title)).join(" · ")}</p>` : ""}${openK.map(k => `<div class="chk-r ${k.lvl}"><i></i><div class="tx"><b>${esc(k.title)}</b>${k.txt ? `<span>${esc(k.txt)}</span>` : ""}</div>${btn(k)}</div>`).join("")}</section>`;
+  const K = E.trackingChecks(B, ST, c.t, c.Ex, Date.now()), now = K.filter(k => k.kind === "now"); if (compact) return now.length;
+  const btn = k => !k.act ? "" : k.act === "review" ? `<button class="btn sm pri" data-act="review">Nachtragen</button>` : k.act === "garmin" ? `<button class="btn sm pri" data-act="garmin">Garmin holen</button>` : k.act === "mc" ? `<button class="btn sm" data-act="mc" data-v="${c.t}">Morgen-Check</button>` : k.act === "ld" ? `<button class="btn sm" data-act="ld">Eintragen</button>` : /^test:/.test(k.act) ? `<button class="btn sm${k.kind === "now" ? " pri" : ""}" data-act="test" data-k="${esc(k.act.slice(5))}">Eintragen</button>` : "";
+  const G = [["now", "Jetzt erledigen", "Dauert jeweils unter einer Minute."], ["habit", "Jeden Morgen", "Kleine Routine, damit die App deine Signale kennt."], ["later", "Kommt mit Termin", "Nichts zu tun, bis der Termin da ist. Die App erinnert dich."], ["watch", "Beobachtet die App", "Hinweise aus deinen Daten. Kein Knopf nötig, nur beachten."]];
+  const tag = k => k.kind === "later" ? (k.due ? (k.due <= c.t ? "fällig" : "ab " + U.wdD(k.due)) : "sobald Befund da") : k.kind === "now" ? "jetzt" : k.kind === "habit" ? "täglich" : "Hinweis";
+  const row = k => `<div class="chk-r ${k.kind}"><i></i><div class="tx"><b>${esc(k.title)}</b>${k.txt ? `<span>${esc(k.txt)}</span>` : ""}</div><div class="chk-a"><span class="chk-t">${esc(tag(k))}</span>${k.kind === "later" && !(k.due && k.due <= c.t) && k.act !== "ld" ? "" : btn(k)}</div></div>`;
+  const okK = K.filter(k => k.kind === "done");
+  return `<section class="chk" aria-label="Checks"><div class="chk-hero ${now.length ? "warn" : "ok"}"><b class="num">${now.length || ui("check")}</b><div><h3>${now.length ? now.length + (now.length > 1 ? " Dinge jetzt erledigen" : " Ding jetzt erledigen") : "Gerade nichts zu tun"}</h3><p>Die Checks aktualisieren sich bei jedem Öffnen selbst. Erledigtes verschwindet automatisch, abhaken musst du nichts.</p></div></div>
+   ${G.map(([k, h, sub]) => { const L = K.filter(x => x.kind === k); return L.length ? `<div class="chk-g"><div class="chk-gh"><h4>${h}</h4><span>${sub}</span></div>${L.map(row).join("")}</div>` : ""; }).join("")}
+   ${okK.length ? `<div class="chk-g done"><div class="chk-gh"><h4>Erledigt</h4></div><p class="chk-ok">${ui("check")}${okK.map(k => esc(k.title)).join(" · ")}</p></div>` : ""}</section>`;
 }
 /* ---------- 5.1 Hiron-Muster (Aufbau übernommen, Farben Gehhilfe) ---------- */
 const MONK = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sep.", "Okt.", "Nov.", "Dez."];
@@ -493,31 +509,45 @@ function weekCard(c) {
    <div class="wkc-days">${F.days.map(d => `<button class="wkc-d ${d.st}${d.today ? " today" : ""}" data-act="day" data-v="${d.d}" aria-label="${esc(U.WDL[U.sd(d.d).getUTCDay()])} ${d.day}., ${d.min ? hDur(d.min) : "Ruhetag"}"><span class="wd">${esc(d.wd.slice(0, 2))}</span><b>${d.day}</b><span class="du">${d.min ? esc(hDur(d.min)) : "Ruhe"}</span><i></i></button>`).join("")}</div>
    <div class="wkc-prog" role="img" aria-label="${Math.round(pct * 100)} Prozent der Woche"><i style="width:${Math.round(pct * 100)}%"></i></div></section>`;
 }
+let RVW = 0;
 function weekReviewCard(c, w, always) {
   const cw = c.cw, wd = U.sd(c.t).getUTCDay(); w = w || cw - 1; if (!always && !(wd === 1 || wd === 2 || wd === 0)) return "";
-  if (!always && wd === 0) w = cw; const Rv = E.weekReview(B, ST, c.t + (wd === 0 && !always ? 1 : 0), w); if (!Rv) return "";
-  return `<section class="wrc" aria-label="Wochenrückblick"><div class="wrc-h"><div><span class="gk">Wochenrückblick · ${esc(rangeTxt(Rv.from, Rv.to))}</span><h3>Woche ${Rv.w}</h3></div><div class="wrc-sc"><b>${String(Rv.score).replace(".", ",")}</b><small>/10</small><span>Score</span></div></div>
-   <div class="wrc-k"><div><span>Erledigt</span><b>${esc(hDur(Rv.am) || "0′")}<small> / ${esc(hDur(Rv.pm))}</small></b></div><div><span>Einheiten</span><b>${Rv.nDone}<small> / ${Rv.n}</small></b></div><div><span>Schlüssel</span><b>${Rv.keyDone}<small> / ${Rv.key}</small></b></div></div>
-   ${Rv.pos.length ? `<div class="take-s ok"><h4>Positives</h4><ul>${Rv.pos.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${Rv.obs.length ? `<div class="take-s warn"><h4>Beobachtungspunkte</h4><ul>${Rv.obs.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}</section>`;
+  if (!always && wd === 0) w = cw; const Rv = E.weekReview(B, ST, c.t + (wd === 0 && !always ? 1 : 0), w); if (!Rv) return always ? `<div class="grp"><div class="empty"><b>Noch kein Rückblick</b>Der erste Rückblick kommt nach deiner ersten vollen Woche.</div></div>` : "";
+  const sc = Rv.score, verdict = sc >= 8.5 ? "Starke Woche" : sc >= 7 ? "Solide Woche" : sc >= 5 ? "Durchwachsen" : "Da geht mehr", C = 2 * Math.PI * 34, q = Math.max(0, Math.min(1, sc / 10));
+  const hl = t0 => { const e = esc(t0), i = e.indexOf(":"); return i > 0 && i < 40 ? `<b>${e.slice(0, i + 1)}</b>${e.slice(i + 1)}` : e.replace(/^(\d+(?:,\d+)?(?: von \d+)?(?: %)?)/, "<b>$1</b>"); };
+  const kp = (lab, a, b, frac) => `<div><span>${lab}</span><b class="num">${a}<small> / ${b}</small></b><i style="--q:${Math.max(0, Math.min(1, frac)).toFixed(2)}"></i></div>`;
+  const nav = always ? `<div class="wrc-nav"><button class="iconbtn sm" data-act="rvw" data-v="${w - 1}" ${w <= 1 ? "disabled" : ""} aria-label="Woche davor">${ui("chev")}</button><button class="iconbtn sm" data-act="rvw" data-v="${w + 1}" ${w >= cw - 1 ? "disabled" : ""} aria-label="Woche danach">${ui("chev")}</button></div>` : "";
+  return `<section class="wrc" aria-label="Wochenrückblick Woche ${Rv.w}"><div class="wrc-hero">
+    <div class="wrc-top"><span class="gk">Wochenrückblick · ${esc(rangeTxt(Rv.from, Rv.to))}</span>${nav}</div>
+    <div class="wrc-main"><svg class="wrc-ring" viewBox="0 0 80 80" role="img" aria-label="Score ${String(sc).replace(".", ",")} von 10"><circle cx="40" cy="40" r="34" class="bg"/><circle cx="40" cy="40" r="34" class="fg" stroke-dasharray="${(C * q).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 40 40)"/><text x="40" y="44" text-anchor="middle" class="v">${String(sc).replace(".", ",")}</text><text x="40" y="58" text-anchor="middle" class="u">von 10</text></svg>
+     <div><h3>Woche ${Rv.w}</h3><p class="wrc-v">${verdict}</p></div></div>
+    <div class="wrc-k">${kp("Stunden", esc(hDur(Rv.am) || "0′"), esc(hDur(Rv.pm)), Rv.pm ? Rv.am / Rv.pm : 0)}${kp("Einheiten", Rv.nDone, Rv.n, Rv.n ? Rv.nDone / Rv.n : 0)}${kp("Schlüssel", Rv.keyDone, Rv.key, Rv.key ? Rv.keyDone / Rv.key : 1)}</div></div>
+   ${Rv.pos.length || Rv.obs.length ? `<div class="wrc-body">${Rv.pos.length ? `<div class="wrc-l ok"><h4>${ui("check")}Das lief gut</h4><ul>${Rv.pos.map(x => `<li>${hl(x)}</li>`).join("")}</ul></div>` : ""}${Rv.obs.length ? `<div class="wrc-l warn"><h4>${ui("info")}Darauf achten</h4><ul>${Rv.obs.map(x => `<li>${hl(x)}</li>`).join("")}</ul></div>` : ""}</div>` : ""}</section>`;
 }
 function raceCard(c, max) {
   const RT = E.raceTargets(B, ST, c.t).slice(0, max || 2); if (!RT.length) return "";
-  return RT.map((r, i) => `<section class="rtc${i ? " sec2" : ""}" aria-label="Renntag-Ziele ${esc(r.name)}"><div class="rtc-h"><span class="gk">Renntag-Ziele</span><h3>${esc(r.name)}</h3><span class="pill">in ${r.days} Tagen</span></div>
-    ${r.rows.map(o => `<div class="rtc-row" style="--c:${sp(o.sport).c}"><div class="rtc-l"><span class="rtc-ic">${icon(o.sport)}</span>${esc(o.lab)}</div><div class="rtc-v"><b>${esc(o.range)}</b>${o.est ? `<span>${esc(o.est)}</span>` : ""}<span class="rtc-g ${o.ok ? "ok" : ""}">${esc(o.goal)}</span></div>
-      ${o.p ? `<div class="rtc-bar" aria-hidden="true"><i class="cur" style="left:${(o.p.cur * 100).toFixed(1)}%"></i><i class="goal" style="left:${(o.p.goal * 100).toFixed(1)}%"></i></div><div class="rtc-lg"><span>langsamer</span><span>● heute&nbsp;&nbsp;◆ Ziel</span><span>schneller</span></div>` : ""}</div>`).join("")}
-    <p class="rtc-tip"><img src="logo.png" alt=""><span><b>Opas Tipp:</b> ${esc(r.tip)}</span></p></section>`).join("");
+  const dist = lab => { const m = String(lab).match(/(\d+(?:,\d)?)\s*km/); return m ? parseFloat(m[1].replace(",", ".")) : 0; };
+  return RT.map(r => `<section class="rtc" aria-label="Renntag-Ziele ${esc(r.name)}"><div class="rtc-h"><div><span class="gk">Renntag · ${esc(U.wdD(r.date))}</span><h3>${esc(r.name)}</h3></div><span class="pill">in ${r.days} Tagen</span></div>
+    ${r.rows.map(o => { const d = dist(o.lab), gp = num(o.g) && d ? U.mss(o.g / d) + " /km" : "", gm = num(o.gap) ? Math.round(o.gap * 1440) : null;
+      return `<div class="rtc-row" style="--c:${sp(o.sport).c}"><div class="rtc-l"><span class="rtc-ic">${icon(o.sport)}</span>${esc(o.lab)}</div>
+      <div class="rtc-cmp"><div class="is"><span>Heute möglich</span><b class="num">${esc(String(o.est || o.range).replace(/^≈\s*/, ""))}</b>${o.est ? `<small>${esc(o.range)}</small>` : ""}</div>
+       <div class="goal"><span>Ziel</span><b class="num">${esc(String(o.goal).replace(/^Ziel\s*/, ""))}</b>${gp ? `<small>${esc(gp)}</small>` : ""}</div></div>
+      ${gm != null ? `<div class="rtc-gap ${gm <= 0 ? "ok" : ""}">${gm <= 0 ? ui("check") + "Ziel in Reichweite" : "Noch " + gm + " min schneller nötig"}</div>` : ""}</div>`; }).join("")}
+    <p class="rtc-tip"><b>Opas Tipp</b><span>${esc(r.tip)}</span></p></section>`).join("");
 }
+const QUICK = [["Nur 30 min", "heute nur 30 min"], ["Bin platt", "bin platt"], ["Lieber morgen", "lieber morgen"], ["Kein Gym", "kein gym"], ["Krank", "bin krank"], ["Dienstreise", "dienstreise"]];
 function chatBox(c) {
-  const R = CHAT.r;
-  let x = `<form class="chat" data-chat="1" onsubmit="return false"><img src="logo.png" alt=""><input class="inp" id="chatq" placeholder="Frag Opa … z. B. „heute nur 30 min“" autocomplete="off" enterkeyhint="send" value="${esc(CHAT.q || "")}"><button type="button" class="chat-go" data-act="chatgo" aria-label="Senden">${ui("chev")}</button></form>`;
-  if (R) x += `<div class="chat-a"><p>${esc(R.msg)}</p>${R.act ? `<div class="chat-b"><button class="btn sm pri" data-act="chatok">${esc(R.act)}</button><button class="btn sm ghost" data-act="chatno">Lieber nicht</button></div>` : ""}</div>`;
-  return x;
+  if (c && c.pre) return ""; const R = CHAT.r;
+  let x = `<section class="qhelp" aria-label="Plan für heute anpassen"><div class="qhelp-h"><img src="logo.png" alt=""><div><b>Passt heute was nicht?</b><span>Antippen, Opa schlägt eine Anpassung vor. Nichts ändert sich ohne dein OK.</span></div></div>
+   <div class="qhelp-c">${QUICK.map(([l, q]) => `<button class="qchip" data-act="chatq" data-v="${esc(q)}" aria-pressed="${CHAT.q === q}">${esc(l)}</button>`).join("")}</div>`;
+  if (R) x += `<div class="chat-a"><p>${esc(R.msg)}</p><div class="chat-b">${R.act ? `<button class="btn sm pri" data-act="chatok">${esc(R.act)}</button>` : ""}<button class="btn sm ghost" data-act="chatno">${R.act ? "Lieber nicht" : "Schließen"}</button></div></div>`;
+  return x + `</section>`;
 }
 const CHAT = { q: "", r: null, it: null };
 function chatAsk(q) {
   const c = C(), it = E.chatIntent(q, c.t, c.Ex); CHAT.q = q; CHAT.it = it;
   const nm = s => String(s.name).replace(/^★\s*/, "");
-  CHAT.r = !it ? { msg: "Das verstehe ich noch nicht. Probier „heute nur 30 min“, „bin krank“, „Dienstreise“, „kein Gym“, „lieber morgen“ oder „bin platt“." }
+  CHAT.r = !it ? { msg: "Dafür habe ich gerade keinen Vorschlag." }
     : it.kind === "none" ? { msg: it.msg }
     : it.kind === "short" ? { msg: "Klar. " + nm(it.s) + " wird auf " + it.min + " min gekürzt, den Hauptreiz behältst du. Der Rest der Woche bleibt, wie er ist.", act: "Auf " + it.min + " min kürzen" }
     : it.kind === "movetest" ? { msg: nm(it.s) + " ist ein Test und lässt sich nicht kürzen, sonst stimmen deine Zonen nicht. Ich schiebe ihn auf den nächsten passenden Tag.", act: "Test verschieben" }
@@ -569,7 +599,7 @@ function goalCard(c) {
   const act = Object.keys(ST).filter(k => k.startsWith("adj:")).map(k => ST[k].v).find(a => a && !a.undone && /^goal:/.test(a.key || ""));
   const nOpen = checksCard(c, true), span = Math.max(P.p0, P.now) - P.p1 || 1, pos = v => Math.max(0, Math.min(100, (Math.max(P.p0, P.now) - v) / span * 100));
   const st = P.behind > 1 / 1440 ? "hinter Plan" : "auf Kurs";
-  return `<section class="goalc ${G.lvl}" aria-label="Ziel"><button class="goalc-b" data-tab="fort"><span class="tx"><span class="gk">Ziel ${esc(P.race.replace("Marathon ", ""))} · noch ${P.days} Tage</span>
+  return `<section class="goalc ${G.lvl}" aria-label="Ziel"><button class="goalc-b" data-tab="fort" data-sub="ziel"><span class="tx"><span class="gk">Ziel ${esc(P.race.replace("Marathon ", ""))} · noch ${P.days} Tage</span>
    <span class="gline"><b>${hm5(P.now)}</b><span class="gtrack"><i class="soll" style="left:${pos(P.sNow).toFixed(1)}%"></i><i class="now" style="left:${pos(P.now).toFixed(1)}%"></i><i class="goal" style="left:100%"></i></span><b class="gz">${hm5(P.p1)}</b></span>
    <span class="gl">Heute ${hm5(P.now)} · Soll heute ${hm5(P.sNow)} · ${esc(st)}</span>
    <span class="gchips"><span class="gc ${G.lvl}">Plantreue ${G.score} %</span>${nOpen ? `<span class="gc warn">${nOpen} Check${nOpen > 1 ? "s" : ""} offen</span>` : `<span class="gc ok">Checks grün</span>`}</span></span>${ui("chev", "chev")}</button>
@@ -821,11 +851,14 @@ const SX_OPEN = new Set(); let SX_ID = null, JUST_DONE = null;
 function paceOf(min, km, sport) { if (!num(km) || !num(min) || km <= 0 || min <= 0) return ""; if (sport === "Lauf") return E.paceStr(min, km) + " /km"; if (sport === "Rad") return de(Math.round(km / (min / 60) * 10) / 10) + " km/h"; if (sport === "Schwimmen") return U.mss(min / (km * 10) / 1440) + " /100 m"; return ""; }
 /* Zielwerte aus dem tatsächlichen Hauptteil, nicht nur aus dem Einheitentyp (sonst stünde beim Fahrtspiel "locker"). */
 function sxPlan(s, c) {
-  const z = zoneOf(s, c), zf = code => E.zone(Object.assign({}, s, { code }), B, c.R), wsteps = ["Lauf", "Rad", "Schwimmen"].includes(s.sport) ? Library.buildWorkout(s, zf, c.R.css ? c.R.css * 86400 : null) : [];
+  const z = zoneOf(s, c), zf = code => E.zone(Object.assign({}, s, { code }), B, c.R), wsteps = ["Lauf", "Rad", "Schwimmen"].includes(s.sport) ? Library.buildWorkout(s, zf, c.R.css ? c.R.css * 86400 : null, c.R.cssEst ? c.R.cssEst * 86400 : null) : [];
   const mains = wsteps.filter(x0 => x0.kind === "main" || x0.kind === "drill"), core = mains.length ? mains.reduce((a0, b0) => ((b0.z || 1) > (a0.z || 1) ? b0 : a0)) : wsteps.find(x0 => x0.kind === "easy") || null;
   const mainZ = core ? core.z || 1 : ({ T: 3, I: 4, HMZ: 3, MP: 2, LRM: 2, MD: 2, TEST: 4, M: 2, R3: 2, R4: 3 }[s.code] || 1);
   const mixed = core && wsteps.some(x0 => (x0.z || 1) === 1 && x0.kind !== "strides") && (core.z || 1) > 1;
-  return { z, wsteps, mainZ, mixed, pace: core && core.target ? core.target : z.pace, hf: core && core.hf ? core.hf : z.hf };
+  /* 6.1: Immer eine konkrete Pace zeigen. Hat der Kernblock keine (Hügelsprints, Drills), die nächste Pace aus dem Ablauf bzw. der Zone nehmen. */
+  const hasP = t => /\d:\d\d/.test(t || ""); let pace = core && core.target ? core.target : z.pace;
+  if (!hasP(pace) && s.sport !== "Rad") { const alt = wsteps.find(x0 => x0 !== core && x0.kind !== "warm" && x0.kind !== "cool" && hasP(x0.target)) || wsteps.find(x0 => hasP(x0.target)); pace = alt ? (pace ? pace + " · " : "") + alt.target : hasP(z.pace) ? z.pace : pace; }
+  return { z, wsteps, mainZ, mixed, pace, hf: core && core.hf ? core.hf : z.hf };
 }
 function goalLine(s, P) {
   const hf = P.hf ? "HF " + String(P.hf).replace(/^HF\s*/i, "").replace(/\s*bpm$/, "") : "";
@@ -1423,13 +1456,22 @@ function vSeason(c) {
 }
 
 /* ---------- Fortschritt ---------- */
-let progRange = "saison";
+let progRange = "saison", FSUB = "rv";
+/* 6.1: aktiven Reiter in der Leiste sichtbar halten (iPhone: Leiste scrollt seitlich). */
+function fsubShow() { const b = $(".fsub-in [aria-pressed=true]"), w = b && b.parentElement; if (w) w.scrollLeft = Math.max(0, b.offsetLeft - (w.clientWidth - b.offsetWidth) / 2); }
+const FSUBS = [["rv", "Rückblick"], ["ziel", "Ziel"], ["trn", "Training"], ["chl", "Challenges"], ["chk", "Checks"], ["wert", "Werte"]];
 function vProg(c) {
   const t = c.t, F = c.F, TR = c.TR, R = c.R, today = F.find(x => x.d === t) || F[F.length - 1];
   const vo2 = TR.vo2, vd = TR.vdot, tg = E.vdotTargets(B), lastVo2 = vo2.slice(-1)[0], lastVd = vd.slice(-1)[0];
   const tsbTxt = !today ? "" : today.tsb > 5 ? ["frisch", "ok"] : today.tsb > -10 ? ["ausgewogen", "ok"] : today.tsb > -25 ? ["im Aufbau", "warn"] : ["sehr müde", "bad"];
   let x = `<header class="lt"><div><div class="eyebrow">Prognose, Form und Aktivitäten</div><h1>Fortschritt</h1></div><div class="acts">${GAR_BTN(1)}<button class="iconbtn" data-act="imp" aria-label="Aktivitäten importieren">${ui("down")}</button><button class="iconbtn" data-act="vo2" aria-label="VO2max eintragen">${ui("plus")}</button></div></header>`;
-  x += pathCard(c) + chartCard(c) + badgeCard(c) + checksCard(c) + raceCard(c, 1) + weekReviewCard(c, c.cw - 1, true);
+  const sub = tab === "daten" ? "wert" : FSUB, nChk = checksCard(c, true);
+  if (tab !== "daten") x += `<nav class="fsub" aria-label="Bereiche im Fortschritt"><div class="fsub-in">${FSUBS.map(([k, l]) => `<button data-act="fsub" data-v="${k}" aria-pressed="${sub === k}">${l}${k === "chk" && nChk ? `<span class="fsub-n">${nChk}</span>` : ""}</button>`).join("")}</div></nav>`;
+  if (sub === "rv") return x + weekReviewCard(c, RVW && RVW < c.cw ? RVW : c.cw - 1, true);
+  if (sub === "ziel") return x + pathCard(c) + raceCard(c, 2);
+  if (sub === "trn") return x + chartCard(c);
+  if (sub === "chl") return x + badgeCard(c);
+  if (sub === "chk") return x + checksCard(c);
   x += `<div class="kpis" style="margin-top:0">
     <button class="kpi" data-act="info" data-v="form"><span class="info">${ui("info")}</span><div class="kl">Form</div><div class="kv">${today ? (today.tsb > 0 ? "+" : "") + Math.round(today.tsb) : "–"}</div><div class="ks ${tsbTxt[1] || ""}">${tsbTxt[0] || ""}</div></button>
     <button class="kpi" data-act="info" data-v="form"><span class="info">${ui("info")}</span><div class="kl">Fitness</div><div class="kv">${today ? Math.round(today.ctl) : "–"}</div><div class="ks">Ermüdung ${today ? Math.round(today.atl) : "–"}</div></button>
@@ -1945,7 +1987,7 @@ function doRender() {
   const root = $("#root");
   if (!B) { root.innerHTML = vWelcome(); return; }
   const c = C(), n = navBadge(c), wide = WIDE();
-  let body = tab === "heute" ? vHeute(c) : tab === "ges" ? vGes(c) : tab === "plan" ? vPlan(c) : tab === "fort" || tab === "daten" ? vProg(c) + vData(c).replace(/^<header class="lt">[\s\S]*?<\/header>/, '<div class="sec"><h2>Aktivitäten und Import</h2></div>') : vProf(c);
+  let body = tab === "heute" ? vHeute(c) : tab === "ges" ? vGes(c) : tab === "plan" ? vPlan(c) : tab === "fort" || tab === "daten" ? vProg(c) + (tab === "fort" && FSUB !== "wert" ? "" : vData(c)).replace(/^<header class="lt">[\s\S]*?<\/header>/, '<div class="sec"><h2>Aktivitäten und Import</h2></div>') : vProf(c);
   if (tab === "plan" || tab === "fort") body = body.replace(/<header class="lt">([\s\S]*?)<\/header>/, (m, a) => a.includes('class="avatar"') ? m : '<header class="lt">' + (a.includes('<div class="acts">') ? a.replace('<div class="acts">', '<div class="acts">' + LOGO_BTN) : a + '<div class="acts">' + LOGO_BTN + '</div>') + '</header>');
   const nx = B.S.events.filter(e => e.date >= c.t).sort((a, b) => a.date - b.date)[0];
   const rail = PREF.side === "rail";
@@ -2072,7 +2114,7 @@ function syncInputs(F, sport) {
 }
 
 document.addEventListener("click", async e => {
-  const tb = e.target.closest("[data-tab]"); if (tb) { keepDraft(INSP, selId); tab = tb.dataset.tab; planSel = false; selId = null; INSP = { mode: "" }; for (let k = SHEETS.length - 1; k >= 0; k--) if (SHEETS[k].side) SHEETS.splice(k, 1); else closeSheet(SHEETS[k], true); window.scrollTo(0, 0); buzz(4); doRender(); return; }
+  const tb = e.target.closest("[data-tab]"); if (tb) { keepDraft(INSP, selId); tab = tb.dataset.tab; if (tb.dataset.sub) { FSUB = tb.dataset.sub; setTimeout(fsubShow, 0); } planSel = false; selId = null; INSP = { mode: "" }; for (let k = SHEETS.length - 1; k >= 0; k--) if (SHEETS[k].side) SHEETS.splice(k, 1); else closeSheet(SHEETS[k], true); window.scrollTo(0, 0); buzz(4); doRender(); return; }
   const b = e.target.closest("[data-act]");
   /* Schwebendes Einheit-Fenster: Tippen auf eine freie Stelle außerhalb schließt es. */
   if (!b && $("#insp") && WIDE() && !e.target.closest("#insp,.sheet-wrap,.toast,button,a,input,select,textarea,label,summary,details,[role=button],[role=slider]")) { closeInsp(); return; }
@@ -2143,6 +2185,10 @@ document.addEventListener("click", async e => {
     case "aicheck": { const S = SHEETS[SHEETS.length - 1], raw = (S.data.f && S.data.f.airesp) || ($(".sheet [data-in=airesp]") || {}).value || ""; S.data.res = E.aiValidate(B, ST, today(), raw); rerenderSheet(S); break; }
     case "kitake": kiTake(id); break;
     case "pchart": PCH = v; render(); break;
+    case "fsub": FSUB = v; buzz(4); window.scrollTo(0, 0); render(); fsubShow(); break;
+    case "rvw": RVW = +v; render(); break;
+    case "chl": openSheet(S => chlSheet(S.data), { label: "Challenge", data: { k: v } }); break;
+    case "chatq": chatAsk(v); break;
     case "wkdet": openSheet(S => weekDetail(S.data), { label: "Woche", data: { w: +v }, live: true, side: false }); break;
     case "slot": set("set:slot", v); toast(v === "morgen" ? "Trainingszeiten auf morgens gestellt." : "Trainingszeiten wie im Plan.", { icon: "check" }); break;
     case "ld": openSheet(S => ldSheet(S.data), { label: "Leistungsdiagnostik", data: {} }); break;

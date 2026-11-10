@@ -550,7 +550,7 @@ function proposals(B, st, t) {
 
   // 4 Verpasste Einheiten
   const gapWin = E.filter(s => s.date >= t - 10 && s.date < t && isTrain(s) && (s.prio === "A" || s.prio === "B") && !sickOn(st, s.date, t));
-  const gapMiss = gapWin.filter(s => statusOf(st, s, t) === "✗"), gapPm = gapWin.reduce((a, s) => a + s.min, 0), gapMm = gapMiss.reduce((a, s) => a + s.min, 0);
+  const gapMiss = gapWin.filter(s => statusOf(st, s, t) === "✗" && ["muede", "krank"].includes((val(st, "log:" + s.id) || {}).why)), gapPm = gapWin.reduce((a, s) => a + s.min, 0), gapMm = gapMiss.reduce((a, s) => a + s.min, 0);
   const isGap = gapMiss.length >= 3 && gapPm >= 180 && gapMm >= .5 * gapPm;
   if (isGap) { /* Lücke: Einzelvorschläge entfallen, Block 5 übernimmt */ } else
   E.forEach(s => {
@@ -564,7 +564,7 @@ function proposals(B, st, t) {
     }
     if (s.prio !== "A") return;
     const key = "miss:" + s.id;
-    if (s.code === "LR" || s.code === "LRM") { add({ key, sev: "info", kind: "info", title: s.name + " fällt weg", why: "Ein langer Lauf passt nicht sinnvoll in die restliche Woche, die Regel lautet: nicht nachholen. Den nächsten langen Lauf deckelt die App, falls der Sprung zu groß wird (höchstens +3 km zum letzten erledigten).", ops: [] }); return; }
+    if (s.code === "LR" || s.code === "LRM") { add({ key, sev: "info", kind: "info", title: s.name + " fällt weg", why: "Ein langer Lauf passt nicht sinnvoll in die restliche Woche. Die App holt ihn über die nächsten Long Runs auf: Sie wachsen ab deinem längsten Lauf um bis zu 15 % pro Woche zurück auf den Plan.", ops: [] }); return; }
     if (inTaper(s.date) || inTaper(t)) { add({ key, sev: "info", kind: "info", title: s.name + " fällt weg (Taper)", why: "So kurz vor dem Rennen wird nichts nachgeholt. Frische schlägt Fitness.", ops: [] }); return; }
     if (strained && !s.test) { add({ key, sev: "info", kind: "info", title: s.name + " fällt weg", why: "Dein Check-in zeigt Warnsignale. Jetzt nichts nachholen, Erholung geht vor.", ops: [] }); return; }
     const lim = s.test ? t + 7 : Math.min(Math.max(weekEnd(B, s.w), s.date + 3), t + 5);
@@ -594,10 +594,39 @@ function proposals(B, st, t) {
     if (lrs.length && logged && !sickOn(st, t, t)) {
       const best = longestDone(E, st, t, t - 30, t - 1), base = best > 0 ? best : 5;
       const ops = [], lines = [];
-      lrs.forEach(s => { const n = Math.max(1, Math.ceil((s.date - t + 1) / 7)), cap = Math.max(6, Math.round(base * Math.pow(1.1, n) * 2) / 2);
-        if (s.km > cap + .4) { const min = r5(s.min * cap / s.km); ops.push({ type: "edit", id: s.id, patch: { km: cap, min, name: "Long Run " + String(cap).replace(".", ",") + " km (statt " + s.km + ")", time: timeRange(tStart(s.time), min) }, note: "Aufbau ab deinem Stand: +10 % pro Woche." }); } });
+      lrs.forEach(s => { const n = Math.max(1, Math.ceil((s.date - t + 1) / 7)), cap = Math.max(6, Math.round(base * Math.pow(LR_STEP, n) * 2) / 2);
+        if (s.km > cap + .4) { const min = r5(s.min * cap / s.km); ops.push({ type: "edit", id: s.id, patch: { km: cap, min, name: "Long Run " + String(cap).replace(".", ",") + " km (statt " + s.km + ")", time: timeRange(tStart(s.time), min) }, note: "Aufbau ab deinem Stand: +" + Math.round((LR_STEP - 1) * 100) + " % pro Woche." }); } });
       if (ops.length) add({ key: "lrplan:" + ops.map(o => o.id + "=" + o.patch.km).join(","), sev: "info", title: "Long Runs neu aufgebaut ab " + String(r1(base)).replace(".", ",") + " km",
-        why: (best > 0 ? "Dein längster erledigter Lauf der letzten 30 Tage: " + String(r1(best)).replace(".", ",") + " km. " : "In den letzten 30 Tagen ist kein Lauf eingetragen, Basis 5 km. ") + "Die nächsten langen Läufe steigen ab da um höchstens 10 % pro Woche. Größere Sprünge erhöhen das Überlastungsrisiko deutlich (Frandsen et al. 2025, 5.200 Läufer). Sobald du länger läufst, zieht der Plan automatisch wieder an.", ops });
+        why: (best > 0 ? "Dein längster erledigter Lauf der letzten 30 Tage: " + String(r1(best)).replace(".", ",") + " km. " : "In den letzten 30 Tagen ist kein Lauf eingetragen, Basis 5 km. ") + "Die nächsten langen Läufe steigen ab da um höchstens " + Math.round((LR_STEP - 1) * 100) + " % pro Woche. Größere Sprünge erhöhen das Überlastungsrisiko deutlich (Frandsen et al. 2025, 5.200 Läufer). Sobald du länger läufst, zieht der Plan automatisch wieder an.", ops });
+    }
+  }
+
+  // 7 v5.0 Zielsicherung: Rückstand aus Zeitmangel aufholen, damit die Ziele nicht kippen (Felix: „aggressiver“).
+  // Grenzen: Woche höchstens 120 % des Plans, jede Einheit höchstens +25 % (max. +15 min), nie zwei harte Tage hintereinander, nichts bei Krankheit, Schmerz ab 4/5 oder rotem Morgen-Check.
+  {
+    const from = Math.max(B.S.start, t - 14), sp3 = ["Lauf", "Rad", "Schwimmen"];
+    const win = E.filter(s => s.date >= from && s.date < t && isTrain(s) && !s.test && sp3.includes(s.sport) && (s.prio === "A" || s.prio === "B") && !sickOn(st, s.date, t) && statusOf(st, s, t) !== "krank" && (val(st, "log:" + s.id) || {}).why !== "reise");
+    const pm = win.reduce((p, s) => p + (s.min || 0), 0), am = win.reduce((p, s) => p + actual(st, s, t).min, 0) + freeList(st).filter(f => f.date >= from && f.date < t && sp3.includes(f.sport)).reduce((p, f) => p + (f.dur || 0), 0);
+    const D = pm - am, missQ = win.filter(s => !["✓", "½"].includes(statusOf(st, s, t)) && s.sport === "Lauf" && intentOf(s) === "q").length;
+    const painHi = E.some(s => s.date >= t - 3 && s.date < t && (painLvl(val(st, "log:" + s.id) || {}) || 0) >= 4), mr = morningReady(B, st, t);
+    const loggedAny = win.some(s => statusOf(st, s, t)) || freeList(st).some(f => f.date >= from && f.date < t);
+    if ((D >= 45 || missQ) && loggedAny && !sickOn(st, t, t) && !painHi && !(mr && mr.cls === "bad") && !inTaper(t)) {
+      const next = E.filter(s => s.date >= t && s.date < t + 14 && open(s) && !s.test && !inTaper(s.date) && !s.goalUp && !absOn(st, s.date, t).length && (s.prio === "A" || s.prio === "B"));
+      const planNext = next.reduce((p, s) => p + (s.min || 0), 0); let budget = Math.min(D * .6, planNext * .2);
+      const ops = [], wkAdd = {}, wkPlan = {}; E.filter(s => s.date >= t && s.date < t + 14 && isTrain(s)).forEach(s => { wkPlan[s.w] = (wkPlan[s.w] || 0) + (s.min || 0); });
+      const hardOn = d => E.some(y => y.date === d && isTrain(y) && (isHard(y) || ["q", "lr", "lrq", "test"].includes(intentOf(y)))) || ops.some(o => o.hard === d);
+      /* a) Qualität: eine verpasste Schwelle in den nächsten 7 Tagen einbauen, auf einem lockeren Lauf ohne harte Nachbartage */
+      if (missQ && budget >= 0) { const c = next.find(s => s.date < t + 7 && s.sport === "Lauf" && intentOf(s) === "easy" && s.min >= 35 && !hardOn(s.date - 1) && !hardOn(s.date + 1) && !hardOn(s.date));
+        if (c) { const min = Math.max(c.min, 50), km = r1(Math.max(c.km || 0, 9)); ops.push({ type: "edit", id: c.id, hard: c.date, patch: { name: "Schwelle 5×4' (aufgeholt)", code: "T", prio: "A", min, km, desc: "2 km ein, 5x4' zügig (Schwelle, Gefühl 7/10) / 2' traben, Rest locker", time: timeRange(tStart(c.time), min), goalUp: true }, note: "Verpasste Qualität aufgeholt." }); wkAdd[c.w] = (wkAdd[c.w] || 0) + (min - c.min); budget -= min - c.min; } }
+      /* b) Umfang: lockere Läufe, Rad und Schwimmen etwas länger */
+      for (const s of next) { if (budget < 5) break; if (ops.some(o => o.id === s.id)) continue; const iv = intentOf(s); if (!["easy", "swim"].includes(iv) && !(s.sport === "Rad" && s.code === "R2")) continue; if (s.min < 20) continue;
+        const add = Math.min(budget, s.sport === "Rad" ? 30 : 15, Math.round(s.min * .25)), cap = (wkPlan[s.w] || 0) * .2 - (wkAdd[s.w] || 0); const inc = r5(Math.min(add, cap)); if (inc < 5 || cap < 5) continue;
+        const min = s.min + inc, km = s.km ? r1(s.km * min / s.min) : 0;
+        ops.push({ type: "edit", id: s.id, patch: { min, km, time: timeRange(tStart(s.time), min), goalUp: true }, note: "Aufholen: +" + inc + " min." }); wkAdd[s.w] = (wkAdd[s.w] || 0) + inc; budget -= inc; }
+      ops.forEach(o => delete o.hard);
+      if (ops.length) { const tot = Object.values(wkAdd).reduce((p, q) => p + q, 0);
+        add({ key: "goal:" + weekOf(B, t) + ":" + Math.round(D / 30) + ":" + missQ, sev: "warn", title: "Ziel halten: +" + Math.round(tot) + " min in den nächsten 2 Wochen",
+          why: "In den letzten 14 Tagen fehlen " + Math.round(D) + " min Training (" + Math.round(am / Math.max(1, pm) * 100) + " % vom Plan)" + (missQ ? " und " + missQ + " Qualitätseinheit" + (missQ > 1 ? "en" : "") : "") + ". Damit Linz und das Allgäu nicht kippen, holt die App einen Teil davon nach: lockere Einheiten etwas länger" + (ops.some(o => o.patch.code === "T") ? ", eine Schwelle eingebaut" : "") + ". Grenzen: Woche höchstens 120 % des Plans, nie zwei harte Tage hintereinander. Hält dein Körper das nicht, über den Morgen-Check oder einen Schmerz-Eintrag bremst die App sofort.", ops }); }
     }
   }
   const order = { bad: 0, warn: 1, info: 2 };
@@ -1107,7 +1136,7 @@ function aiPacket(B, st, t, E) {
     zonen: { lthr: Math.round(R.lthr), hfmax: B.S.hfmax, ruhepuls: B.S.rest }, form: { fitness: Math.round(f.ctl || 0), ermuedung: Math.round(f.atl || 0), form: Math.round(f.tsb || 0) },
     laengster_lauf_30d_km: r1(lr30), morgen_check_14_tage: (() => { const o = []; for (let d = t - 13; d <= t; d++) { const m = val(st, "mc:" + d); if (m) o.push({ d: d - t, schlaf_h: m.sleep ?? null, gefuehl_1_5: m.feel ?? null, ruhepuls: m.puls ?? null, muskelkater_0_3: m.sore ?? null }); } return o; })(),
     gewicht_trend_kg_pro_woche: (() => { const w = weightTrend(st, t); return w && w.n >= 3 ? Math.round(w.wk * 100) / 100 : null; })(), abwesend_tage_rel: [...new Set(away)].sort((a, b) => a - b), ist_21_tage: ist, frei_21_tage: frei, plan_14_tage: plan,
-    regeln: ["Nur Einheiten aus plan_14_tage ändern (id).", "Tests und Rennen nicht ändern.", "Wochenumfang höchstens 110 % des Plans.", "Long Run höchstens 10 % über laengster_lauf_30d_km.", "Höchstens " + AI_MAX + " Änderungen.", "Keine medizinischen Aussagen."] };
+    regeln: ["Nur Einheiten aus plan_14_tage ändern (id).", "Tests und Rennen nicht ändern.", "Wochenumfang höchstens 120 % des Plans.", "Long Run höchstens 15 % über laengster_lauf_30d_km.", "Nie zwei harte Tage hintereinander.", "Ziel: Verpasstes aufholen und Training hoch halten, solange keine Warnsignale vorliegen.", "Höchstens " + AI_MAX + " Änderungen.", "Keine medizinischen Aussagen."] };
 }
 const AI_PROMPT = 'Du bist ein erfahrener Lauf- und Triathloncoach. Prüfe das JSON-Paket (Ist-Daten der letzten 21 Tage, Plan der nächsten 14 Tage) und schlage nur nötige Anpassungen vor, um Ermüdung, Lücken und Abwesenheiten sinnvoll aufzufangen. Halte dich an "regeln". Antworte ausschließlich mit JSON in diesem Format: {"zusammenfassung":"1-3 Sätze auf Deutsch","aenderungen":[{"id":"<id aus plan_14_tage>","aktion":"aendern|streichen|verschieben","min":<Zahl>,"km":<Zahl>,"locker":true|false,"auf_tag":<relative Tageszahl, nur bei verschieben>,"grund":"kurz auf Deutsch"}]}. Wenn keine Änderung nötig ist, gib eine leere Liste zurück.';
 function aiValidate(B, st, t, resp) {
@@ -1138,12 +1167,12 @@ function aiValidate(B, st, t, resp) {
       let min = num(Number(c.min)) && Number(c.min) > 0 ? r5(Number(c.min)) : s.min, km = num(Number(c.km)) && Number(c.km) >= 0 ? r1(Number(c.km)) : s.km;
       if (min > s.min * 1.25) { errs.push(n + "mehr als +25 % Dauer, auf +25 % begrenzt"); min = r5(s.min * 1.25); }
       if (km > (s.km || 0)) { const byTime = r1((s.km || 0) * min / (s.min || min) * 1.05); if (km > byTime) { errs.push(n + "Distanz passt nicht zur Dauer, begrenzt"); km = Math.max(s.km || 0, byTime); } }
-      if (s.sport === "Lauf" && km > (s.km || 0) && km >= 12) { const capL = lr30 ? Math.round(lr30 * 1.1) : s.km || 0; if (km > capL) { errs.push(n + (lr30 ? "Long Run über +10 % zum längsten Lauf der letzten 30 Tage, begrenzt" : "ohne Lauf in den letzten 30 Tagen keine Verlängerung")); km = Math.max(s.km || 0, capL); } }
+      if (s.sport === "Lauf" && km > (s.km || 0) && km >= 12) { const capL = lr30 ? Math.round(lr30 * LR_STEP) : s.km || 0; if (km > capL) { errs.push(n + (lr30 ? "Long Run über +" + Math.round((LR_STEP - 1) * 100) + " % zum längsten Lauf der letzten 30 Tage, begrenzt" : "ohne Lauf in den letzten 30 Tagen keine Verlängerung")); km = Math.max(s.km || 0, capL); } }
       const patch = c.locker && isHard(s) ? Object.assign(lockerPatch(s, min / (s.min || min), note), { min, km, time: timeRange(tStart(s.time), min) }) : { min, km, time: timeRange(tStart(s.time), min) };
       wkDelta[s.w] = (wkDelta[s.w] || 0) + min - (s.min || 0); ops.push({ type: "edit", id: s.id, patch, note }); return; }
     errs.push(n + "Aktion unbekannt: " + String(c.aktion).slice(0, 20));
   });
-  Object.keys(wkDelta).forEach(w => { const base = weekMin(+w); if (base && (wkCur(+w) + wkDelta[w]) > base * 1.1 && wkDelta[w] > 0) { errs.push("Woche " + w + ": Umfang über 110 %, Erhöhungen dieser Woche verworfen"); for (let i = ops.length - 1; i >= 0; i--) { const op = ops[i], s = E.find(x => x.id === op.id); if ((op.type === "edit" && s && s.w === +w && op.patch.min > s.min) || (op.type === "add" && weekOf(B, op.s.date) === +w && op.s.w !== +w)) { if (op.type === "add") { const di = ops.findIndex(z => z.type === "drop" && z.id === String(op.s.id).split("~")[0]); ops.splice(i, 1); if (di >= 0) { ops.splice(di, 1); i--; } } else ops.splice(i, 1); } } } });
+  Object.keys(wkDelta).forEach(w => { const base = weekMin(+w); if (base && (wkCur(+w) + wkDelta[w]) > base * 1.2 && wkDelta[w] > 0) { errs.push("Woche " + w + ": Umfang über 120 %, Erhöhungen dieser Woche verworfen"); for (let i = ops.length - 1; i >= 0; i--) { const op = ops[i], s = E.find(x => x.id === op.id); if ((op.type === "edit" && s && s.w === +w && op.patch.min > s.min) || (op.type === "add" && weekOf(B, op.s.date) === +w && op.s.w !== +w)) { if (op.type === "add") { const di = ops.findIndex(z => z.type === "drop" && z.id === String(op.s.id).split("~")[0]); ops.splice(i, 1); if (di >= 0) { ops.splice(di, 1); i--; } } else ops.splice(i, 1); } } } });
   const p = { key: "ai:" + t + ":" + Date.now(), sev: "info", title: "KI-Coach: " + (ops.length ? ops.filter(o2 => o2.type !== "add").length + " Änderungen" : "keine Änderung"), why: String(o.zusammenfassung || "").slice(0, 400), ops, needsOk: true };
   p.lines = describeOps(ops, E);
   return { ok: true, p, errs };
@@ -1222,6 +1251,14 @@ function gPick(o, names) { if (!o || typeof o !== "object") return null; for (co
 function gWalk(node, fn, depth) { depth = depth || 0; if (!node || typeof node !== "object" || depth > 8) return; if (Array.isArray(node)) { node.forEach(n => gWalk(n, fn, depth + 1)); return; } fn(node); for (const k in node) if (node[k] && typeof node[k] === "object") gWalk(node[k], fn, depth + 1); }
 const gDateOf = o => { for (const k of ["calendarDate", "summaryDate", "date", "calendarDay", "day", "startDate"]) { const v = o[k]; if (typeof v === "string" && /^\d{4}-\d\d-\d\d/.test(v)) return v.slice(0, 10); } return null; };
 const isoSerial = s => serialOf(new Date(s + "T12:00:00"));
+/* 5.0: Was Garmin zur Einheit selbst weiß. Trainingseffekt (aerob/anaerob, 0–5), Trainingslast, Zeit je Pulszone (Sekunden), Kadenz, VO2max. Fehlende Felder bleiben weg. */
+function gExtra(a) { const o = {}, pick = (k, ks) => { const v = gPick(a, ks); if (v != null && isFinite(v)) o[k] = v; };
+  pick("te", ["aerobicTrainingEffect", "trainingEffect", "summary.aerobicTrainingEffect"]); pick("tea", ["anaerobicTrainingEffect", "summary.anaerobicTrainingEffect"]);
+  pick("load", ["activityTrainingLoad", "trainingLoad"]); pick("cad", ["averageRunningCadenceInStepsPerMinute", "averageRunCadence", "avgRunCadence"]);
+  pick("vo2", ["vO2MaxValue", "vo2MaxValue", "vO2MaxPreciseValue"]); pick("spd", ["averageSpeed", "averageSpeedInMetersPerSecond"]);
+  const zs = [1, 2, 3, 4, 5].map(i => gPick(a, ["hrTimeInZone_" + i])); if (zs.some(z => z != null)) o.zs = zs.map(z => z == null ? 0 : Math.round(z));
+  if (typeof a.trainingEffectLabel === "string") o.lab = a.trainingEffectLabel;
+  return Object.keys(o).length ? o : undefined; }
 function garminNormalize(raw) {
   const acts = [], days = {};
   const D = iso => days[iso] = days[iso] || {};
@@ -1235,7 +1272,7 @@ function garminNormalize(raw) {
     acts.push({ gid: String(id), iso, date: isoSerial(iso), time: String(st).slice(11, 16), typeKey: tk, sport, name: a.activityName || G_NAMES[tk] || (sport === "Sonstiges" ? tk.replace(/_/g, " ").replace(/^./, c => c.toUpperCase()) : sport),
       dist: dist != null ? Math.round(dist) / 1000 : null, dur: dur != null ? Math.round(dur / 6) / 10 : null,
       hf: gPick(a, ["averageHR", "averageHeartRateInBeatsPerMinute", "avgHr", "averageHeartRate"]), hfmax: gPick(a, ["maxHR", "maxHeartRateInBeatsPerMinute", "maxHr", "maxHeartRate"]),
-      hm: gPick(a, ["elevationGain", "totalElevationGainInMeters", "elevationGainInMeters"]), cal: gPick(a, ["calories", "activeKilocalories"]) });
+      hm: gPick(a, ["elevationGain", "totalElevationGainInMeters", "elevationGainInMeters"]), cal: gPick(a, ["calories", "activeKilocalories"]), gx: gExtra(a) });
   });
   const take = (src, fn) => gWalk(src, o => { const iso = gDateOf(o); if (iso) fn(D(iso), o); });
   take(raw && raw.daily, (d, o) => { const r = gPick(o, ["restingHeartRate", "restingHeartRateInBeatsPerMinute", "heartRate.restingHeartRate", "heartRate.restingValue", "restingHeartRateValue"]); if (r != null && d.rhr == null) d.rhr = r;
@@ -1268,13 +1305,15 @@ function garminApply(B, st, t, N) {
       const nl = Object.assign({}, l, { st: l.st === "½" ? "½" : "✓", gid: a.gid, src: manual ? (l.src || "hand") : "garmin" });
       if (!manual) Object.assign(nl, { dur: a.dur, dist: a.dist, ikm: undefined, imin: undefined });
       ["hf", "hfmax", "hm"].forEach(f => { if (nl[f] == null && a[f] != null) nl[f] = a[f]; });
+      if (a.gx) nl.gx = a.gx;
       if (JSON.stringify(nl) !== JSON.stringify(l)) { puts.push(["log:" + s.id, nl]); if (l.st && manual) sum.enriched++; else sum.done++; sum.names.push(a.name); }
       return; }
-    const k = "free:g" + a.gid, f = val(st, k), nf = { date: a.date, sport: a.sport, name: a.name, dur: a.dur, dist: a.sport === "Kraft" || a.sport === "Mobility" ? null : a.dist, hf: a.hf, hm: a.hm, src: "garmin", gid: a.gid, typeKey: a.typeKey };
+    const k = "free:g" + a.gid, f = val(st, k), nf = { date: a.date, sport: a.sport, name: a.name, dur: a.dur, dist: a.sport === "Kraft" || a.sport === "Mobility" ? null : a.dist, hf: a.hf, hm: a.hm, src: "garmin", gid: a.gid, typeKey: a.typeKey }; if (a.gx) nf.gx = a.gx;
     if (f && f.src !== "garmin") return; /* von Hand bearbeitet: nicht überschreiben */
     if (f && f.del) return;
     if (!f || JSON.stringify(Object.assign({}, f)) !== JSON.stringify(Object.assign({}, f, nf))) { puts.push([k, Object.assign({}, f || {}, nf)]); if (!f) { sum.free++; sum.names.push(a.name); } }
   });
+  N.acts.forEach(a => { if (a.gx && num(a.gx.vo2) && a.gx.vo2 > 20 && a.gx.vo2 < 90 && !val(st, "vo2:" + a.date)) { puts.push(["vo2:" + a.date, a.gx.vo2]); sum.vo2 = a.gx.vo2; } });
   for (const iso in N.days) { const d = N.days[iso], ser = isoSerial(iso), gk = "gar:d:" + ser, old = val(st, gk);
     if (JSON.stringify(old) !== JSON.stringify(d)) { puts.push([gk, d]); sum.days++; }
     const m = val(st, "mc:" + ser) || {}, nm = Object.assign({}, m);
@@ -1497,6 +1536,142 @@ function healthInsights(days) {
   const ord = { warn: 0, info: 1, ok: 2 }; items.sort((a, b) => ord[a.sev] - ord[b.sev]);
   return { enough: true, n, items };
 }
-G.Engine = { freeHard, FREE_HARD_LOAD, healthDays, rollMean, bandOf, healthInsights, H_KEYS, garminNormalize, garminApply, hrvSignal, gSport, painLvl, sportSummary, parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
+/* ---------- 5.0 Coach-Einschätzung je Einheit (wie „Coach's Take“): Was hat es gebracht, worauf achten, was heißt das fürs Ziel, worauf kommt es nächstes Mal an.
+   Reine Regeln aus Plan-Absicht, Ist-Werten und Garmin-Daten. Keine Diagnose, keine erfundenen Werte: Fehlt etwas, wird es nicht bewertet. ---------- */
+const LR_STEP = 1.15; /* Long-Run-Aufbau pro Woche (5.0: aggressiver, vorher 1,10) */
+const Q_CODES = ["I", "T", "HMZ", "MP", "LRM", "MD", "R3", "R4", "M"];
+function intentOf(s) { const n = String(s.name || "");
+  if (s.test) return "test"; if (s.sport === "Lauf" && ["LR", "LRM"].includes(s.code)) return s.code === "LRM" ? "lrq" : "lr";
+  if (Q_CODES.includes(s.code) || /Fahrtspiel|Intervall|Hügelsprint|Schwelle|Tempo/i.test(n)) return "q";
+  if (s.sport === "Kraft") return "kraft"; if (s.sport === "Schwimmen") return "swim"; return "easy"; }
+const mssK = min => { const sec = Math.round(min * 60); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); };
+function workoutTake(B, st, t, s, E) {
+  if (!s || s.isFree) return null; const x = statusOf(st, s, t); if (x !== "✓" && x !== "½") return null;
+  E = E || effective(B, st); const R = derive(B, st), l = val(st, "log:" + s.id) || {}, a = actual(st, s, t), gx = l.gx || {}, L = R.lthr;
+  let it = intentOf(s); const good = [], watch = [], out = { it, good, watch, next: "", goal: "", hit: "ok" };
+  /* Geplant locker, aber laut Freitext Intervalle gelaufen: als Qualität werten und offen sagen */
+  const iv = (l.segs || []).find(g => g.kind === "iv" && g.n > 1 && num(g.pace));
+  if (iv && ["easy", "lr"].includes(it) && s.sport === "Lauf") { watch.push("Geplant war locker, gelaufen bist du " + iv.n + "×" + String(iv.each).replace(".", ",") + " km in " + mssK(iv.pace) + " /km. Tempo hat einen Reiz bekommen, der lockere Grundlagentag fehlt dafür."); it = out.it = "q"; out.dev = true; }
+  const pace = s.sport === "Lauf" && a.km > 0 && a.min > 0 ? a.min / a.km : null;
+  const cap = s.sport === "Lauf" ? (it === "easy" && s.w <= 8 ? B.S.cap : Math.round(L * .89)) : s.sport === "Rad" ? Math.round(R.radl * .89) : null;
+  /* Umfang */
+  if (s.min > 0 && a.min > 0) { const q = a.min / s.min;
+    if (q < .75) { watch.push("Kürzer als geplant: " + Math.round(a.min) + " von " + s.min + " min."); out.hit = "teil"; }
+    else if (q > 1.3 && it !== "kraft") watch.push("Deutlich länger als geplant: " + Math.round(a.min) + " statt " + s.min + " min. Kostet Erholung für die nächste Schlüsseleinheit."); }
+  /* Intensität: Puls gegen Absicht */
+  const hf = num(l.hf) ? l.hf : null;
+  if (hf && cap && ["easy", "lr"].includes(it)) {
+    const d = hf - cap;
+    if (d > 4) { watch.push("Puls im Schnitt " + hf + ", " + d + " über dem Deckel von " + cap + ". Das war eher Tempo als Grundlage: weniger Fettstoffwechsel-Reiz, mehr Ermüdung."); out.hit = "teil"; out.cue = "hf"; }
+    else good.push("Puls im Schnitt " + hf + " und damit unter dem Deckel von " + cap + ": saubere Grundlage, genau der Reiz, der dich auf lange Sicht schneller macht."); }
+  if (hf && it === "q" && s.sport === "Lauf") { const p = hf / L; if (p >= .9) good.push("Qualitätsreiz gesetzt: Puls im Schnitt bei " + Math.round(p * 100) + " % deiner Schwelle (" + L + ")."); else { watch.push("Für eine Qualitätseinheit eher ruhig (Schnitt " + Math.round(p * 100) + " % der Schwelle). Die schnellen Abschnitte bringen nur etwas, wenn sie wirklich zügig sind."); out.hit = "teil"; } }
+  /* Garmin-Trainingseffekt gegen Absicht (Firstbeat-Skala 0–5) */
+  if (num(gx.te)) {
+    if (["easy", "lr", "swim"].includes(it)) { if (gx.te > 3.6 && it === "easy") watch.push("Aerober Trainingseffekt " + gx.te.toFixed(1) + ": für einen lockeren Tag zu viel. Ziel sind 2,0 bis 3,0."); else good.push("Aerober Trainingseffekt " + gx.te.toFixed(1) + (gx.te >= 3 ? ": verbessert deine Ausdauer." : ": erhält deine Ausdauer.")); }
+    if (it === "q" || it === "lrq") { if (num(gx.tea) && gx.tea >= 2) good.push("Anaerober Effekt " + gx.tea.toFixed(1) + ": Tempohärte und Laktattoleranz bekommen einen Reiz."); else if (num(gx.tea)) watch.push("Anaerober Effekt nur " + gx.tea.toFixed(1) + ": die schnellen Teile waren zu kurz oder zu langsam."); } }
+  if (Array.isArray(gx.zs)) { const tot = gx.zs.reduce((p, q) => p + q, 0); if (tot > 600) { const hi = (gx.zs[3] + gx.zs[4]) / tot; if (["easy", "lr"].includes(it) && hi > .2) watch.push(Math.round(hi * 100) + " % der Zeit in Zone 4 bis 5. Locker heißt Zone 1 bis 2."); } }
+  /* Pace */
+  if (pace && it === "q" && /1000|1 km|1km/.test(String(s.name + s.desc))) good.push("Schnitt " + mssK(pace) + " /km über alles.");
+  if (pace && ["easy", "lr"].includes(it)) { const z = zone(s, B, R), m = String(z.pace || "").match(/(\d+):(\d\d)/); if (m) { const lo = (+m[1] * 60 + +m[2]) / 60; if (pace < lo - .25) { watch.push("Mit " + mssK(pace) + " /km schneller als geplant (ab " + m[1] + ":" + m[2] + "). Schneller ist hier nicht besser."); out.hit = "teil"; } } }
+  /* Long Run: Basis fürs Marathonziel */
+  if (s.sport === "Lauf" && a.km > 0) { const prev = longestDone(E, st, t, s.date - 30, s.date - 1);
+    if (a.km > prev && a.km >= 8) good.push("Längster Lauf der letzten 30 Tage: " + String(r1(a.km)).replace(".", ",") + " km. Der nächste lange Lauf darf bis " + String(Math.round(a.km * 1.15 * 2) / 2).replace(".", ",") + " km wachsen."); }
+  /* Gefühl, RPE, Schmerz */
+  if (num(l.rpe) && l.rpe >= 8 && ["easy", "lr", "swim"].includes(it)) watch.push("Anstrengung " + l.rpe + "/10 bei einer lockeren Einheit. Schlaf, Essen oder ein Infekt im Anmarsch? Morgen-Check ernst nehmen.");
+  const pl = painLvl({ pain: l.pain, ps: l.ps }); if (pl && pl >= 3) { watch.push("Schmerz " + pl + "/5 eingetragen. Ab 4/5 macht die App den nächsten harten Tag locker."); out.hit = "teil"; }
+  if (!good.length && !watch.length) good.push(s.sport === "Kraft" ? "Kraft erledigt: macht Sehnen und Laufstil robuster, gerade mit Blick auf den Hallux." : s.sport === "Schwimmen" ? "Wasserzeit gesammelt. Beim Schwimmen zählt Regelmäßigkeit mehr als Tempo." : "Einheit erledigt.");
+  /* Nächstes Mal: gleiche Sportart, nächste offene Einheit */
+  const nx = E.find(y => y.date > s.date && y.date >= t && y.sport === s.sport && isTrain(y) && !statusOf(st, y, t));
+  if (nx) { const z = zone(nx, B, R), ni = intentOf(nx), day = WDL[sd(nx.date).getUTCDay()];
+    out.nextId = nx.id; out.next = day + ", " + String(nx.name).replace(/^★\s*/, "") + ": " + (
+      ni === "easy" || ni === "lr" ? (out.cue === "hf" ? "Puls schlägt Pace. Bleib unter " + (String(z.hf).replace("<", "") || cap) + ", auch wenn das 6:30 /km oder Gehpausen am Berg heißt." : "locker bleiben, Puls " + (z.hf || "im Grundlagenbereich") + ", Pace " + (z.pace || "nach Gefühl") + ".")
+      : ni === "q" || ni === "lrq" ? "die schnellen Abschnitte bei " + (z.pace || "Zielpace") + ", dazwischen wirklich locker. Lieber eine Wiederholung weniger als alle zu langsam."
+      : ni === "test" ? "ausgeruht kommen, gleichmäßig anlaufen, die zweite Hälfte entscheidet."
+      : ni === "swim" ? "Technik zuerst: lange Züge, ruhig ausatmen, Pausen am Rand nutzen." : "sauber und kontrolliert, Technik vor Gewicht."); }
+  /* Wirkung aufs Ziel */
+  const G = goalStatus(B, st, t, E); out.goal = G.short;
+  return out;
+}
+
+/* ---------- 5.0 Zielstatus: Konsistenz der letzten 4 Wochen gegen das, was die Ziele brauchen ---------- */
+function goalStatus(B, st, t, E) {
+  E = E || effective(B, st); const R = derive(B, st), from = Math.max(B.S.start, t - 28);
+  const win = E.filter(s => s.date >= from && s.date < t && isTrain(s) && !s.test && !sickOn(st, s.date, t) && statusOf(st, s, t) !== "krank" && ["Lauf", "Rad", "Schwimmen"].includes(s.sport));
+  const done = s => { const x = statusOf(st, s, t); return x === "✓" || x === "½"; };
+  const key = win.filter(s => s.prio === "A"), keyDone = key.filter(done).length;
+  const pm = win.reduce((p, s) => p + (s.min || 0), 0), am = win.reduce((p, s) => p + actual(st, s, t).min, 0) + freeList(st).filter(f => f.date >= from && f.date < t && ["Lauf", "Rad", "Schwimmen"].includes(f.sport)).reduce((p, f) => p + (f.dur || 0), 0);
+  const vol = pm ? Math.min(1.5, am / pm) : 1, kc = key.length ? keyDone / key.length : 1, score = Math.round(Math.min(1, .6 * vol + .4 * kc) * 100);
+  const missQ = win.filter(s => !done(s) && (Q_CODES.includes(s.code) || intentOf(s) === "q") && s.sport === "Lauf"), missLR = win.filter(s => !done(s) && intentOf(s) === "lr");
+  const lvl = score >= 80 ? "ok" : score >= 55 ? "knapp" : "kritisch", gap = R.prog - B.S.tgtM;
+  const days = B.S.events.length ? Math.min(...B.S.events.filter(e => e.date >= t).map(e => e.date - t)) : null;
+  const short = lvl === "ok" ? "Auf Kurs: " + score + " % Plantreue in 4 Wochen." : lvl === "knapp" ? "Knapp: " + score + " % Plantreue. Die App baut Verpasstes in die nächsten Wochen ein." : "Ziel wackelt: nur " + score + " % Plantreue. Ohne die nächsten Schlüsseleinheiten ist 3:09 in Linz nicht zu halten.";
+  const head = lvl === "ok" ? "Auf Kurs" : lvl === "knapp" ? "Knapp dran" : "Ziel wackelt";
+  const why = lvl === "ok" ? "Du trainierst, was die Ziele brauchen. Weiter so." : lvl === "knapp" ? "Verpasstes baut die App in die nächsten Wochen ein." : "Jetzt zählen die nächsten Schlüsseleinheiten. Die App holt Verpasstes nach, so weit es sicher geht.";
+  return { head, why, score, lvl, vol: Math.round(vol * 100), key: key.length, keyDone, pm: Math.round(pm), am: Math.round(am), missQ: missQ.length, missLR: missLR.length, prog: R.prog, tgt: B.S.tgtM, gap, days, short };
+}
+
+/* ---------- 5.1 Hiron-Muster: Wochenkarte, Wochenrückblick, Renntag-Ziele, Chat-Absichten ---------- */
+const SP3 = ["Schwimmen", "Rad", "Lauf"];
+const hText = m => { m = Math.round(m || 0); const h = Math.floor(m / 60), r = m % 60; return h ? h + "h" + (r ? String(r).padStart(2, "0") : "") : r + " min"; };
+function weekFocus(B, st, t, E, w) {
+  E = E || effective(B, st); const NW = Math.max(...B.plan.map(p => p.w)); w = w || Math.min(NW, Math.max(1, weekOf(B, t)));
+  const from = B.S.start + 7 * (w - 1), to = from + 6, ph = (B.weeks[w] || {}).phase || "", rel = /\(E\)/.test(ph);
+  const its = E.filter(s => s.date >= from && s.date <= to && isTrain(s));
+  const so = its.reduce((p, s) => p + (s.min || 0), 0), is = its.reduce((p, s) => p + (s.date <= t ? actual(st, s, t).min : 0), 0) + freeList(st).filter(f => f.date >= from && f.date <= to).reduce((p, f) => p + (f.dur || 0), 0);
+  const focus = []; its.filter(s => s.prio === "A" || s.test).sort((a, b) => a.date - b.date).forEach(s => { const n = String(s.name).replace(/^★\s*/, "").replace(/ \(statt .*\)$/, ""); if (!focus.includes(n) && focus.length < 4) focus.push(n); });
+  const nSwim = its.filter(s => s.sport === "Schwimmen").length; if (nSwim >= 2 && focus.length < 4 && !focus.some(f => /Schwimm/.test(f))) focus.push(nSwim + "× Schwimmen");
+  const sports = SP3.concat(["Kraft"]).map(k => { const a = its.filter(s => s.sport === k); if (!a.length) return null; return { sport: k, n: a.length, min: a.reduce((p, s) => p + (s.min || 0), 0), nDone: a.filter(s => ["✓", "½"].includes(statusOf(st, s, t))).length, minDone: a.reduce((p, s) => p + (s.date <= t ? actual(st, s, t).min : 0), 0) }; }).filter(Boolean);
+  const days = []; for (let d = from; d <= to; d++) { const a = its.filter(s => s.date === d), fr = freeList(st).filter(f => f.date === d), mins = a.reduce((p, s) => p + (s.min || 0), 0);
+    const sts = a.map(s => statusOf(st, s, t)); const stt = !a.length ? (fr.length ? "done" : "rest") : sts.every(x => x === "✓" || x === "krank") ? (sts.some(x => x === "✓") ? "done" : "sick") : sts.some(x => x === "✓" || x === "½") ? "part" : d < t ? "miss" : "open";
+    days.push({ d, wd: WD[sd(d).getUTCDay()], day: sd(d).getUTCDate(), min: mins, st: stt, today: d === t, sports: [...new Set(a.map(s => s.sport))] }); }
+  const pw = PHASE_WHY.find(p => p.re.test(ph));
+  return { w, NW, from, to, phase: ph.replace(/\s*\(E\)/, ""), rel, title: rel ? "Entlastungswoche: Erholung schlägt Umfang" : pw ? pw.zweck.split(/[.:]/)[0] : ph, so, is, tgt: [so * .92, so * 1.05].map(x => Math.round(x / 15) * 15), focus, sports, days };
+}
+function weekReview(B, st, t, w) {
+  const E = effective(B, st), F = weekFocus(B, st, t, E, w); if (F.to >= t) return null;
+  const its = E.filter(s => s.date >= F.from && s.date <= F.to && isTrain(s) && !s.test && SP3.concat(["Kraft"]).includes(s.sport) && statusOf(st, s, t) !== "krank");
+  const key = its.filter(s => s.prio === "A"), keyDone = key.filter(s => ["✓", "½"].includes(statusOf(st, s, t))).length, done = its.filter(s => ["✓", "½"].includes(statusOf(st, s, t)));
+  const pm = its.reduce((p, s) => p + (s.min || 0), 0), am = its.reduce((p, s) => p + actual(st, s, t).min, 0) + freeList(st).filter(f => f.date >= F.from && f.date <= F.to).reduce((p, f) => p + (f.dur || 0), 0);
+  const vol = pm ? Math.min(1.2, am / pm) : 1, kc = key.length ? keyDone / key.length : 1, score = Math.round(Math.min(1, .6 * Math.min(1, vol) + .4 * kc) * 100) / 10;
+  const pos = [], obs = [], takes = done.map(s => ({ s, k: workoutTake(B, st, t, s, E) })).filter(x => x.k);
+  const lr = done.filter(s => s.sport === "Lauf").map(s => ({ s, km: actual(st, s, t).km })).sort((a, b) => b.km - a.km)[0];
+  if (lr && lr.km >= 8) pos.push("Längster Lauf: " + String(r1(lr.km)).replace(".", ",") + " km (" + WD[sd(lr.s.date).getUTCDay()] + ").");
+  const clean = takes.filter(x => ["easy", "lr"].includes(x.k.it) && x.k.hit === "ok").length, hot = takes.filter(x => x.k.cue === "hf").length, easyN = takes.filter(x => ["easy", "lr"].includes(x.k.it) || x.k.cue === "hf").length;
+  if (clean) pos.push(clean + " lockere Einheit" + (clean > 1 ? "en" : "") + " sauber im Puls-Deckel.");
+  if (keyDone && keyDone === key.length) pos.push("Alle " + key.length + " Schlüsseleinheiten erledigt.");
+  if (done.some(s => s.sport === "Kraft")) pos.push("Kraft gemacht: gut für Hallux und Laufstil.");
+  if (hot) obs.push(hot + " von " + easyN + " lockeren Einheiten mit Puls über dem Deckel. Locker heißt wirklich locker.");
+  const miss = key.filter(s => statusOf(st, s, t) === "✗"); if (miss.length) obs.push("Verpasst: " + miss.map(s => String(s.name).replace(/^★\s*/, "")).join(", ") + ". Die App baut das in die nächsten Wochen ein.");
+  if (pm && vol < .7) obs.push("Nur " + Math.round(vol * 100) + " % des geplanten Umfangs.");
+  takes.forEach(x => x.k.watch.filter(m => /Schmerz/.test(m)).forEach(m => { if (!obs.includes(m)) obs.push(m); }));
+  return { w: F.w, from: F.from, to: F.to, score, pm: Math.round(pm), am: Math.round(am), n: its.length, nDone: done.length, key: key.length, keyDone, pos, obs };
+}
+/* Renntag-Ziele: Spanne aus dem aktuellen Stand, Ziel daneben, Zeiger zwischen langsam und schnell. Nur, was die App berechnen kann. */
+function raceTargets(B, st, t) {
+  const D = disciplines(B, st, t), R = derive(B, st), ev = B.S.events.filter(e => e.date >= t).sort((a, b) => a.date - b.date), out = [];
+  const pos = (cur, goal) => { const slow = Math.max(cur, goal) * 1.06, fast = Math.min(cur, goal) * .97; return { cur: Math.max(0, Math.min(1, (slow - cur) / (slow - fast))), goal: Math.max(0, Math.min(1, (slow - goal) / (slow - fast))) }; };
+  ev.slice(0, 2).forEach(e => { const rows = [];
+    if (/Frankfurt|HM/.test(e.name)) { const c = R.refHM, g = B.S.tgtHM; rows.push({ sport: "Lauf", lab: "Laufen · 21,1 km", range: mss(c * .99 / HMK) + "–" + mss(c * 1.01 / HMK) + " /km", est: "≈ " + hms(c * .99).replace(/:\d\d$/, "") + "–" + hms(c * 1.01).replace(/:\d\d$/, ""), goal: "Ziel " + hms(g), p: pos(c, g), ok: c <= g }); }
+    else if (/Linz|Marathon/.test(e.name)) { const P = progSpan(R, B.S), g = B.S.tgtM; rows.push({ sport: "Lauf", lab: "Laufen · 42,2 km", range: mss(P.opt / MK) + "–" + mss(P.kon / MK) + " /km", est: "≈ " + hms(P.opt).replace(/:\d\d$/, "") + "–" + hms(P.kon).replace(/:\d\d$/, ""), goal: "Ziel " + hms(g).replace(/:00$/, ""), p: pos(P.opt, g), ok: P.opt <= g }); }
+    else D.filter(d => ["swim", "bike", "md", "od"].includes(d.key)).forEach(d => { if (num(d.cur) && num(d.goal)) rows.push({ sport: d.key === "swim" ? "Schwimmen" : d.key === "bike" ? "Rad" : "Triathlon", lab: d.lab, range: d.curTxt, est: d.pace || "", goal: "Ziel " + (d.goalTxt || hms(d.goal)), p: pos(d.cur, d.goal), ok: d.cur <= d.goal }); else rows.push({ sport: d.key === "swim" ? "Schwimmen" : d.key === "bike" ? "Rad" : "Triathlon", lab: d.lab, range: d.curTxt, est: "", goal: d.goalTxt ? "Ziel " + d.goalTxt : "", p: null }); });
+    const tip = /Linz|Marathon/.test(e.name) ? "Die ersten 10 km am langsamen Ende der Spanne. Der Marathon beginnt bei km 30." : /Frankfurt|HM/.test(e.name) ? "Gleichmäßig anlaufen, ab km 15 darf es weh tun." : "Schwimmen ruhig, Rad nach Gefühl, den Lauf entscheidet die Verpflegung auf dem Rad.";
+    out.push({ name: e.name, date: e.date, days: e.date - t, rows, tip }); });
+  return out;
+}
+/* „Frag Opa“: einfache Planwünsche im Chat erkennen (ohne KI). */
+function chatIntent(text, t, E) {
+  const s0 = String(text || "").toLowerCase(); if (!s0.trim()) return null;
+  const today = E.filter(s => s.date === t && isTrain(s) && !s.dropped), next = E.filter(s => s.date >= t && isTrain(s) && !s.dropped && !s.test).sort((a, b) => a.date - b.date || String(a.time).localeCompare(String(b.time)))[0];
+  if (/krank|erkält|fieber|grippe|infekt/.test(s0)) return { kind: "sick" };
+  if (/reise|unterwegs|hotel|dienstreise|verreis/.test(s0) && !/nur\s*\d+/.test(s0)) return { kind: "trip" };
+  const m = s0.match(/nur\s*(?:noch\s*)?(\d{2,3})\s*(?:min|minuten|')/) || s0.match(/(\d{2,3})\s*(?:min|minuten)\s*(?:zeit|übrig)/);
+  if (m) { const tt = today.find(x => x.test), s = today.find(x => x.sport !== "Kraft" && !x.test) || (tt ? null : today[0] || next); if (!s && tt) return { kind: "movetest", id: tt.id, s: tt }; if (!s) return today[0] && today[0].test ? { kind: "movetest", id: today[0].id, s: today[0] } : { kind: "none", msg: "Heute steht nichts an." }; return { kind: "short", id: s.id, min: Math.max(10, Math.min(+m[1], s.min || +m[1])), s }; }
+  if (/kein(?:e|en)?\s*(gym|fitness|studio|hantel)/.test(s0)) { const s = E.find(x => x.date >= t && x.date < t + 7 && x.sport === "Kraft" && isTrain(x)); return s ? { kind: "nogym", id: s.id, s } : { kind: "none", msg: "Diese Woche steht kein Krafttraining im Studio an." }; }
+  const mv = s0.match(/(verschieb|morgen statt|lieber morgen|auf morgen)/); if (mv && next) return { kind: "move", id: next.id, to: next.date + 1, s: next };
+  if (/müde|platt|schlecht geschlafen|kaputt/.test(s0)) { const h = E.find(x => x.date >= t && x.date <= t + 1 && isHard(x) && !statusOf({}, x, t)); if (h && h.test) return { kind: "movetest", id: h.id, s: h }; return h ? { kind: "easy", id: h.id, s: h } : { kind: "none", msg: "Heute und morgen ist nichts Hartes geplant. Gut schlafen reicht." }; }
+  return null;
+}
+
+G.Engine = { weekFocus, weekReview, raceTargets, chatIntent, hText, workoutTake, goalStatus, intentOf, gExtra, freeHard, FREE_HARD_LOAD, healthDays, rollMean, bandOf, healthInsights, H_KEYS, garminNormalize, garminApply, hrvSignal, gSport, painLvl, sportSummary, parseNote, segText, diaryRows, disciplines, morningReady, restBase, weightList, weightTrend, bodyKg, absences, absOn, ABS_KIND, sickRecs, sickRecOn, distKm, aiPacket, aiValidate, AI_PROMPT, parseCSV, parseNum, parseDurMin, parseWhen, sportOf, parseActivities, matchActivities, compliance, activityList, intensityDist, bests, progSpan, gates, efficiency, improvements, rampRate, autoOk, isTestOp, SRC, WHY, PHASE_WHY, EV_LAB, whyOf, phaseWhy, DAY_T, TEMP, dayType, dayNeeds, mealPlan, fuelSession, racePlan, tempDefault, gphFor, SICK_CAT, FLAGS, FLAGS_BY, REGIONS, EQ_LAB, SUBS, sickCat, sickStages, sickPauses, injAffects, tripEq, eqText, lrSpike, longestDone, estRpe, sessionLoad, freeList, vo2List, loadOf, formSeries, vdot, vdotPoints, vdotTargets, weekStats, proposalsV2, trends, paceStr, LOAD_SCALE, parseWorkbook, effective, derive, zone, proposals, manualMove, manualDrop, merge, ics, statusOf, actual, isTrain, isHard, sickOn, weekOf, weekEnd, activeAdj, resolved, val,
   util: { timeRange, hhmm, sd, serialOf, fmtD, wdD, mss, hms, r1, WD, WDL, tStart, RACE_TYPES, stageOf } };
 })(typeof window !== "undefined" ? window : globalThis);

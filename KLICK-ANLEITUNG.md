@@ -1,4 +1,32 @@
-# Gehhilfe 4.4: Klick-Anleitung
+# Gehhilfe 5.1: Klick-Anleitung
+
+## Neu in 5.1 (Aufbau nach Hiron)
+
+- **Frag Opa:** Das Feld unter dem Tagessatz versteht kurze Wünsche: „heute nur 30 min“, „bin krank“, „Dienstreise“, „kein Gym“, „lieber morgen“, „bin platt“. Opa antwortet und schlägt eine Änderung vor. Mit einem Tipp übernimmst du sie, Rückgängig geht immer. Tests kürzt er nie, er verschiebt sie.
+- **Wochenkarte (Übersicht):** Sie zeigt Woche x von 45, Phase und Datum, darunter den Zweck der Woche in einem Satz, die Zielspanne in Stunden, die Schlüsseleinheiten und eine Tagesleiste mit Dauer und Status. Ein Tag öffnet seine Einheiten.
+- **Einheit, vorher:** Der Ablauf steht offen da, gegliedert in Aufwärmen, Hauptteil und Abwärmen, mit Pace, Puls, Pausen und Zonen-Etikett (z. B. Z1 + Z4-Intervalle).
+- **Einheit, nachher:** Die „Einschätzung des Coaches“ zeigt Erfüllt oder Teilweise, Positives, Beobachtungspunkte und die HF-Zonen-Verteilung aus Garmin.
+- **Wochenrückblick:** Montags, dienstags und sonntags auf der Übersicht, immer unter Fortschritt. Du siehst einen Score von 0 bis 10, erledigte Zeit, Einheiten und Schlüsseleinheiten, dazu Positives und Beobachtungspunkte.
+- **Renntag-Ziele (Fortschritt, oben):** Für die nächsten zwei Rennen siehst du die Pace-Spanne nach heutigem Stand, die geschätzte Zielzeit, dein Ziel und einen Zeiger von heute bis Ziel. Darunter steht Opas Tipp für das Rennen.
+
+## Neu in 5.0
+
+- **Ziele im Blick (Übersicht, unter dem Tagessatz):** Der Ring zeigt deine Plantreue der letzten 4 Wochen. Darunter steht Auf Kurs, Knapp dran oder Ziel wackelt, dazu Schlüsseleinheiten, Minuten und Marathon-Prognose gegen 3:09. Ein Tipp öffnet Fortschritt.
+- **Ziel halten (automatisch):** Fällt Training aus Zeitmangel aus, holt die App einen Teil in den nächsten 2 Wochen nach. Lockere Läufe, Rad und Schwimmen werden etwas länger. Fehlt eine Qualitätseinheit, baut sie eine Schwelle auf einen lockeren Tag ohne harten Nachbartag ein. Die Grenzen:
+  - eine Woche höchstens 120 % des Plans,
+  - jede Einheit höchstens 25 % länger, maximal 15 Minuten,
+  - Long Runs höchstens 15 % mehr pro Woche ab deinem längsten Lauf,
+  - nie zwei harte Tage hintereinander.
+
+  Bei Krankheit, Schmerz ab 4/5 oder rotem Morgen-Check holt die App nichts nach. Die Woche mit 75 % Umfang gibt es nur noch nach Krankheit oder Müdigkeit, nicht nach Zeitmangel. **Zurücknehmen** steht direkt in der Karte.
+- **Coach-Einschätzung zu jeder Einheit:** Sie erscheint, sobald die Einheit erledigt ist, in der Einheit und als „Letzte Einheit“ auf der Übersicht. Sie sagt dir:
+  - was die Einheit gebracht hat,
+  - worauf du achten solltest, etwa Puls über dem Deckel an einem lockeren Tag oder Intervalle statt locker,
+  - was das fürs Ziel heißt,
+  - worauf es bei der nächsten Einheit dieser Sportart ankommt.
+- **KI-Einordnung (optional):** Mit eigenem Claude-Schlüssel (Profil) gibt es in der Einschätzung den Knopf **Von der KI einordnen lassen**. Nur dann gehen die Werte dieser einen Einheit an Claude.
+- **Garmin:** Der Garmin-Knopf übernimmt jetzt zusätzlich Trainingseffekt (aerob und anaerob), Trainingslast, Zeit je Pulszone und Kadenz. Die VO2max landet automatisch im Verlauf.
+- **Sonntags-Review:** Es kommt jetzt mit Wochen-Score (60 % Umfang, 40 % Schlüsseleinheiten) und prüft jede Einheit darauf, ob der gewollte Reiz getroffen wurde.
 
 ## Neu in 4.4
 

@@ -329,6 +329,8 @@ function vHeute(c) {
   if (sickNow) { const sc = E.SICK_CAT[sick.cat], hals = sick.cat === "hals", inj = sick.cat === "verletzung" && E.REGIONS[sick.region];
     x += `<div class="banner ${hals ? "" : "err"}">${ui("sick")}<div class="tx"><b>${esc(sc ? sc.short : "Krank")} seit ${esc(U.wdD(sick.from))}</b> ${hals ? "Nur locker, höchstens 45 Minuten." : inj ? "Pausiert: " + esc(inj.aff.join(", ")) + ". Rest nur schmerzfrei." : "Kein Training, nichts zählt als verpasst."}</div><span class="bt" style="display:flex;gap:6px">${sc ? "" : `<button class="btn sm ghost" data-act="sick">Details</button>`}<button class="btn sm" data-act="sickend">Wieder gesund</button></span></div>`; }
   x += briefing(c, h);
+  x += chatBox(c);
+  const goalHTML = goalCard(c);
   // Hero
   if (h) {
     const s = h.s, z = zoneOf(s, c), S = sp(s.sport), wake = s.wake && h.when === "Morgen" ? "Wecker " + s.wake : s.wake && h.when === "Heute" ? "Wecker " + s.wake : "";
@@ -343,14 +345,132 @@ function vHeute(c) {
   // Offene Einträge
   if (open.length) x += `<div class="openbar"><div class="tx"><b>${open.length} ${open.length === 1 ? "Einheit" : "Einheiten"} offen</b><span>${esc(open.slice(0, 3).map(s => U.WD[U.sd(s.date).getUTCDay()] + " " + s.name.replace(/^★\s*/, "")).join(", "))}${open.length > 3 ? " …" : ""}</span></div><span class="bt"><button class="btn sm" data-act="review">Ansehen</button><button class="btn sm ink" data-act="allok">${ui("check")}Alle erledigt</button></span></div>`;
   // 4.4: Was sich geändert hat (nur neue automatische Anpassungen), offene Vorschläge, Ringe, Heute und morgen, Körper, Termine
+  x += goalHTML;
+  x += weekCard(c);
+  x += ringsBlock(c);
+  x += lastTake(c);
+  x += weekReviewCard(c);
   x += changedBlock(c);
   x += LP.map((p, i) => propCard(p, i, "")).join("");
-  x += ringsBlock(c);
   x += dashGrid(c, h);
   return x;
 }
 
 
+
+
+/* ---------- 5.1 Hiron-Muster (Aufbau übernommen, Farben Gehhilfe) ---------- */
+const MONK = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sep.", "Okt.", "Nov.", "Dez."];
+const rangeTxt = (a, b) => { const x = U.sd(a), y = U.sd(b); return x.getUTCMonth() === y.getUTCMonth() ? x.getUTCDate() + ".–" + y.getUTCDate() + ". " + MONK[y.getUTCMonth()] : x.getUTCDate() + ". " + MONK[x.getUTCMonth()] + " – " + y.getUTCDate() + ". " + MONK[y.getUTCMonth()]; };
+const hDur = m => { m = Math.round(m || 0); if (!m) return ""; const h = Math.floor(m / 60), r = m % 60; return h ? h + "h" + (r ? String(r).padStart(2, "0") : "") : m + "′"; };
+function weekCard(c) {
+  if (c.pre) return ""; const F = E.weekFocus(B, ST, c.t, c.Ex), pct = F.so ? Math.min(1, F.is / F.so) : 0;
+  const LAB = { Schwimmen: "Schwimmen", Rad: "Rad", Lauf: "Laufen", Kraft: "Kraft" };
+  return `<section class="wkc" aria-label="Diese Woche"><div class="wkc-top"><span>Woche ${F.w} von ${F.NW}</span><span class="wkc-ph">${esc(F.rel ? "Entlastung" : F.phase)}</span><span>${esc(rangeTxt(F.from, F.to))}</span></div>
+   <h2>${esc(F.title)}</h2><div class="wkc-tg"><span class="pill">Ziel ${esc(hDur(F.tgt[0]))}–${esc(hDur(F.tgt[1]))}</span><span class="wkc-done">${esc(hDur(F.is) || "0′")} erledigt</span></div>
+   ${F.focus.length ? `<ul class="wkc-f">${F.focus.map(f => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
+   <div class="wkc-days">${F.days.map(d => `<button class="wkc-d ${d.st}${d.today ? " today" : ""}" data-act="day" data-v="${d.d}" aria-label="${esc(U.WDL[U.sd(d.d).getUTCDay()])} ${d.day}., ${d.min ? hDur(d.min) : "Ruhetag"}"><span class="wd">${esc(d.wd.slice(0, 2))}</span><b>${d.day}</b><span class="du">${d.min ? esc(hDur(d.min)) : "Ruhe"}</span><i></i></button>`).join("")}</div>
+   <div class="wkc-prog" role="img" aria-label="${Math.round(pct * 100)} Prozent der Woche"><i style="width:${Math.round(pct * 100)}%"></i></div></section>`;
+}
+function weekReviewCard(c, w, always) {
+  const cw = c.cw, wd = U.sd(c.t).getUTCDay(); w = w || cw - 1; if (!always && !(wd === 1 || wd === 2 || wd === 0)) return "";
+  if (!always && wd === 0) w = cw; const Rv = E.weekReview(B, ST, c.t + (wd === 0 && !always ? 1 : 0), w); if (!Rv) return "";
+  return `<section class="wrc" aria-label="Wochenrückblick"><div class="wrc-h"><div><span class="gk">Wochenrückblick · ${esc(rangeTxt(Rv.from, Rv.to))}</span><h3>Woche ${Rv.w}</h3></div><div class="wrc-sc"><b>${String(Rv.score).replace(".", ",")}</b><small>/10</small><span>Score</span></div></div>
+   <div class="wrc-k"><div><span>Erledigt</span><b>${esc(hDur(Rv.am) || "0′")}<small> / ${esc(hDur(Rv.pm))}</small></b></div><div><span>Einheiten</span><b>${Rv.nDone}<small> / ${Rv.n}</small></b></div><div><span>Schlüssel</span><b>${Rv.keyDone}<small> / ${Rv.key}</small></b></div></div>
+   ${Rv.pos.length ? `<div class="take-s ok"><h4>Positives</h4><ul>${Rv.pos.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}${Rv.obs.length ? `<div class="take-s warn"><h4>Beobachtungspunkte</h4><ul>${Rv.obs.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}</section>`;
+}
+function raceCard(c) {
+  const RT = E.raceTargets(B, ST, c.t); if (!RT.length) return "";
+  return RT.map((r, i) => `<section class="rtc${i ? " sec2" : ""}" aria-label="Renntag-Ziele ${esc(r.name)}"><div class="rtc-h"><span class="gk">Renntag-Ziele</span><h3>${esc(r.name)}</h3><span class="pill">in ${r.days} Tagen</span></div>
+    ${r.rows.map(o => `<div class="rtc-row" style="--c:${sp(o.sport).c}"><div class="rtc-l"><span class="rtc-ic">${icon(o.sport)}</span>${esc(o.lab)}</div><div class="rtc-v"><b>${esc(o.range)}</b>${o.est ? `<span>${esc(o.est)}</span>` : ""}<span class="rtc-g ${o.ok ? "ok" : ""}">${esc(o.goal)}</span></div>
+      ${o.p ? `<div class="rtc-bar" aria-hidden="true"><i class="cur" style="left:${(o.p.cur * 100).toFixed(1)}%"></i><i class="goal" style="left:${(o.p.goal * 100).toFixed(1)}%"></i></div><div class="rtc-lg"><span>langsamer</span><span>● heute&nbsp;&nbsp;◆ Ziel</span><span>schneller</span></div>` : ""}</div>`).join("")}
+    <p class="rtc-tip"><img src="logo.png" alt=""><span><b>Opas Tipp:</b> ${esc(r.tip)}</span></p></section>`).join("");
+}
+function chatBox(c) {
+  const R = CHAT.r;
+  let x = `<form class="chat" data-chat="1" onsubmit="return false"><img src="logo.png" alt=""><input class="inp" id="chatq" placeholder="Frag Opa … z. B. „heute nur 30 min“" autocomplete="off" enterkeyhint="send" value="${esc(CHAT.q || "")}"><button type="button" class="chat-go" data-act="chatgo" aria-label="Senden">${ui("chev")}</button></form>`;
+  if (R) x += `<div class="chat-a"><p>${esc(R.msg)}</p>${R.act ? `<div class="chat-b"><button class="btn sm pri" data-act="chatok">${esc(R.act)}</button><button class="btn sm ghost" data-act="chatno">Lieber nicht</button></div>` : ""}</div>`;
+  return x;
+}
+const CHAT = { q: "", r: null, it: null };
+function chatAsk(q) {
+  const c = C(), it = E.chatIntent(q, c.t, c.Ex); CHAT.q = q; CHAT.it = it;
+  const nm = s => String(s.name).replace(/^★\s*/, "");
+  CHAT.r = !it ? { msg: "Das verstehe ich noch nicht. Probier „heute nur 30 min“, „bin krank“, „Dienstreise“, „kein Gym“, „lieber morgen“ oder „bin platt“." }
+    : it.kind === "none" ? { msg: it.msg }
+    : it.kind === "short" ? { msg: "Klar. " + nm(it.s) + " wird auf " + it.min + " min gekürzt, den Hauptreiz behältst du. Der Rest der Woche bleibt, wie er ist.", act: "Auf " + it.min + " min kürzen" }
+    : it.kind === "movetest" ? { msg: nm(it.s) + " ist ein Test und lässt sich nicht kürzen, sonst stimmen deine Zonen nicht. Ich schiebe ihn auf den nächsten passenden Tag.", act: "Test verschieben" }
+    : it.kind === "easy" ? { msg: "Dann wird " + nm(it.s) + " locker. Eine harte Einheit auf müden Beinen bringt wenig und kostet viel.", act: "Locker machen" }
+    : it.kind === "move" ? { msg: nm(it.s) + " auf morgen schieben?", act: "Auf morgen" }
+    : it.kind === "nogym" ? { msg: "Kein Studio: " + nm(it.s) + " wird zum Zimmer-Workout mit dem eigenen Körpergewicht.", act: "Umstellen" }
+    : it.kind === "sick" ? { msg: "Gute Besserung. Trag kurz ein, was du hast. Die App pausiert und plant den Wiedereinstieg.", act: "Krank melden" }
+    : it.kind === "trip" ? { msg: "Wann und wohin? Mit Reisedaten und Ausstattung plant die App die Tage um.", act: "Reise eintragen" } : { msg: "" };
+  typing = false; if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); doRender();
+}
+function chatApply() {
+  const it = CHAT.it, c = C(); if (!it) return; let p = null; const s = it.s, nm = s ? String(s.name).replace(/^★\s*/, "") : "";
+  if (it.kind === "sick") { CHAT.r = null; CHAT.q = ""; openSheet(S => sickSheet(S.data), { label: "Krank", data: {} }); return; }
+  if (it.kind === "trip") { CHAT.r = null; CHAT.q = ""; openSheet(S => travelSheet(S.data), { label: "Reise", data: {} }); return; }
+  if (it.kind === "short") { const min = it.min, km = s.km ? Math.round(s.km * min / s.min * 10) / 10 : 0; p = { key: "chat:short:" + s.id + ":" + min, title: nm + " auf " + min + " min", why: "Wunsch im Chat: wenig Zeit.", ops: [{ type: "edit", id: s.id, patch: { min, km, name: nm + " (kurz)", time: U.timeRange(U.tStart(s.time), min) }, note: "Im Chat gekürzt." }] }; }
+  if (it.kind === "easy") p = { key: "chat:easy:" + s.id, title: nm + " locker", why: "Wunsch im Chat: müde.", ops: [{ type: "edit", id: s.id, patch: { code: "E", name: nm + " (locker)", prio: "B", desc: "Locker im Grundlagenbereich, Puls unter dem Deckel. " + (s.desc || "") }, note: "Im Chat auf locker gestellt." }] };
+  if (it.kind === "move" || it.kind === "movetest") { const to = it.kind === "move" ? it.to : (() => { for (let d = s.date + 1; d < s.date + 6; d++) if (!c.Ex.some(y => y.date === d && E.isHard(y))) return d; return s.date + 2; })(); p = E.manualMove({ B, st: ST, t: c.t, E: c.Ex }, s, to); p.key = "chat:" + p.key; }
+  if (it.kind === "nogym") p = { key: "chat:nogym:" + s.id, title: nm + " als Zimmer-Workout", why: "Wunsch im Chat: kein Studio.", ops: [{ type: "edit", id: s.id, patch: { name: "Zimmer-Workout (statt " + nm + ")", desc: "Körpergewicht, 3 Runden: 15 Kniebeugen, 10 Ausfallschritte je Seite, 10 Liegestütze, 20 Wadenheben einbeinig, 45 s Plank, 30 s Seitstütz je Seite." }, note: "Im Chat umgestellt." }] };
+  if (!p) return; p.lines = []; const aid = applyAdj(p); CHAT.r = null; CHAT.q = ""; CHAT.it = null; render(); toast("Plan angepasst", { icon: "check", undo: () => setAdjUndone(aid, true) });
+}
+function zoneBar(zs) {
+  if (!Array.isArray(zs)) return ""; const tot = zs.reduce((a, b) => a + b, 0); if (tot < 300) return "";
+  return `<div class="zbar-w"><h4>HF-Zonen-Verteilung</h4><div class="zbar">${zs.map((z, i) => z ? `<i class="z${i + 1}" style="flex:${z}"></i>` : "").join("")}</div><div class="zbar-l">${zs.map((z, i) => `<span><i class="z${i + 1}"></i>Z${i + 1} ${Math.round(z / tot * 100)} %</span>`).join("")}</div></div>`;
+}
+function flowBlock(s, P) {
+  const W = P.wsteps || []; if (!W.length) return "";
+  const grp = { warm: [], main: [], cool: [] }; let seenMain = false;
+  const hasMain = W.some(x0 => !["warm", "easy", "cool"].includes(x0.kind));
+  W.forEach(x0 => { if (x0.kind === "cool" && hasMain) grp.cool.push(x0); else if (hasMain && !seenMain && (x0.kind === "warm" || x0.kind === "easy")) grp.warm.push(x0); else { seenMain = true; grp.main.push(x0); } });
+  const zs = [...new Set(W.map(x0 => x0.z || 1))].sort(), zl = zs.length > 1 ? "Z" + zs[0] + " + Z" + zs[zs.length - 1] + (grp.main.some(x0 => x0.n > 1) ? "-Intervalle" : "") : "Z" + zs[0];
+  const dur = a => Math.round(a.reduce((p, x0) => p + (x0.n || 1) * (x0.dur || 0) + (x0.n > 1 && x0.rest && x0.rest.dur ? (x0.n - 1) * x0.rest.dur : 0), 0));
+  const row = x0 => `<div class="fl-r z${x0.z || 1}"><b>${x0.n > 1 ? x0.n + "× " : ""}${esc(x0.lab.replace(/^\d+\s*[×x]\s*/, ""))}</b><span>${esc([x0.target, x0.hf ? "HF " + x0.hf : "", x0.n > 1 && x0.rest ? (x0.rest.txt || "") : ""].filter(Boolean).join(" · "))}</span></div>`;
+  const sec = (lab, a) => a.length ? `<div class="fl-g"><div class="fl-h"><span>${lab}</span><em>${dur(a) ? dur(a) + " min" : ""}</em></div>${a.map(row).join("")}</div>` : "";
+  return `<section class="flow" aria-label="Ablauf"><div class="flow-h"><h3>Ablauf</h3><span class="pill">${esc(zl)}</span></div>${sec("Aufwärmen", grp.warm)}${sec("Hauptteil", grp.main)}${sec("Abwärmen", grp.cool)}</section>`;
+}
+/* ---------- 5.0 Coach-Einschätzung je Einheit, Zielkarte, letzte Einheit ---------- */
+function takeCard(s, c) {
+  const k = E.workoutTake(B, ST, c.t, s, c.Ex); if (!k) return ""; const l = log(s);
+  const head = k.dev ? "Anders als geplant" : k.hit === "ok" ? "Erfüllt" : "Teilweise";
+  const li = a => `<ul>${a.map(g => `<li>${esc(g)}</li>`).join("")}</ul>`;
+  return `<section class="take ${k.hit}" aria-label="Coach-Einschätzung"><div class="take-h"><img src="logo.png" alt=""><div><span class="take-k">Einschätzung des Coaches</span><b>${esc(head)}</b></div></div>
+   ${k.good.length ? `<div class="take-s ok"><h4>Positives</h4>${li(k.good)}</div>` : ""}${k.watch.length ? `<div class="take-s warn"><h4>Beobachtungspunkte</h4>${li(k.watch)}</div>` : ""}${zoneBar((l.gx || {}).zs)}
+   ${k.next ? `<button class="take-next" data-act="sess" data-id="${esc(k.nextId)}"><span class="tx"><h4>Nächstes Mal</h4><span>${esc(k.next)}</span></span>${ui("chev", "chev")}</button>` : ""}
+   <p class="take-goal">${ui("flag")}<span>${esc(k.goal)}</span></p>
+   ${l.kiTake ? `<div class="take-ki"><h4>KI-Coach</h4><p>${esc(l.kiTake)}</p></div>` : PREF.aikey ? `<button class="btn sm ghost take-kibtn" data-act="kitake" data-id="${esc(s.id)}">${ui("sync")}Von der KI einordnen lassen</button>` : ""}</section>`;
+}
+function goalCard(c) {
+  const G = E.goalStatus(B, ST, c.t, c.Ex), R = c.R, nx = B.S.events.filter(e => e.date >= c.t).sort((a, b) => a.date - b.date)[0];
+  if (c.pre) return "";
+  const act = Object.keys(ST).filter(k => k.startsWith("adj:")).map(k => ST[k].v).find(a => a && !a.undone && /^goal:/.test(a.key || ""));
+  const pct = Math.max(0, Math.min(100, G.score)), C2 = 2 * Math.PI * 22;
+  return `<section class="goalc ${G.lvl}" aria-label="Ziele im Blick"><button class="goalc-b" data-tab="fort"><svg class="gring" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="22" class="bg"/><circle cx="28" cy="28" r="22" class="fg" stroke-dasharray="${(C2 * pct / 100).toFixed(1)} ${C2.toFixed(1)}"/><text x="28" y="32" text-anchor="middle">${pct}</text></svg>
+   <span class="tx"><span class="gk">Ziele im Blick · ${pct} % Plantreue</span><b>${esc(G.head)}</b>${G.lvl === "ok" ? "" : `<span class="gl gwhy">${esc(G.why)}</span>`}<span class="gl">${G.keyDone} von ${G.key} Schlüsseleinheiten · ${G.am} von ${G.pm} min in 4 Wochen</span>
+   <span class="gl">Marathon-Prognose ${U.hms(R.prog).replace(/:\d\d$/, "")} · Ziel ${U.hms(B.S.tgtM).replace(/:\d\d$/, "")}${nx ? " · noch " + (nx.date - c.t) + " Tage bis " + esc(String(nx.name).replace("Marathon ", "")) : ""}</span></span>${ui("chev", "chev")}</button>
+   ${act ? `<div class="goalc-plan">${ui("sync")}<span><b>Aufholplan aktiv.</b> ${esc(act.title.replace(/^Ziel halten: /, ""))}</span><button class="lnkbtn" data-act="undoadj" data-v="${esc(act.id)}">Zurücknehmen</button></div>` : ""}</section>`;
+}
+function lastTake(c) {
+  const t = c.t, L = c.Ex.filter(x => x.date <= t && x.date >= t - 7 && E.isTrain(x) && ["✓", "½"].includes(E.statusOf(ST, x, t))).sort((a, b) => b.date - a.date || String(b.time).localeCompare(String(a.time)));
+  const s = L.find(x => ["Lauf", "Rad", "Schwimmen", "Triathlon"].includes(x.sport)) || L[0];
+  if (!s) return ""; const k = E.workoutTake(B, ST, t, s, c.Ex); if (!k) return "";
+  const first = k.watch[0] || k.good[0] || "";
+  return `<button class="lastt ${k.hit}" data-act="sess" data-id="${esc(s.id)}"><img src="logo.png" alt=""><span class="tx"><span class="gk">Letzte Einheit · ${esc(dayLabel(s.date, t))}</span><b>${esc(String(s.name).replace(/^★\s*/, ""))}: ${esc(k.dev ? "anders als geplant" : k.hit === "ok" ? "Ziel erreicht" : "teilweise getroffen")}</b><span class="gl">${esc(first)}</span>${k.next ? `<span class="gl nx">Nächstes Mal: ${esc(k.next)}</span>` : ""}</span>${ui("chev", "chev")}</button>`;
+}
+async function kiTake(id) {
+  const c = C(), s = findS(id); if (!s || !PREF.aikey) return; const k = E.workoutTake(B, ST, c.t, s, c.Ex), l = log(s);
+  const pack = { einheit: { name: s.name, sport: s.sport, typ: s.code, soll_min: s.min, soll_km: s.km, beschreibung: s.desc, ziel: E.zone(s, B, c.R) }, ist: { min: l.dur, km: l.dist, hf: l.hf, hfmax: l.hfmax, rpe: l.rpe, gefuehl: l.feel, schmerz: l.pain, garmin: l.gx, struktur: l.segs, notiz: l.note ? String(l.note).slice(0, 400) : undefined }, regeln: k, ziele: { linz: "3:09", hm: "1:29:59", allgaeu: "sub 5" } };
+  toast("KI ordnet ein …", { icon: "sync" });
+  try { const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": PREF.aikey, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: PREF.aimodel || "claude-opus-5-5", max_tokens: 600, messages: [{ role: "user", content: "Du bist ein erfahrener Lauf- und Triathloncoach. Ordne diese eine Einheit kritisch ein, auf Deutsch, du-Form, höchstens 5 Sätze, keine Aufzählung, keine Geviertstriche: was sie gebracht hat, was auffällt, was sie für die Ziele heißt und worauf es bei der nächsten Einheit ankommt. Erfinde keine Werte, die nicht im JSON stehen. Keine Diagnosen.\n\n" + JSON.stringify(pack) }] }) });
+    const j = await r.json(); if (!r.ok) throw new Error((j.error && j.error.message) || "HTTP " + r.status);
+    const txt = (j.content || []).filter(b => b.type === "text").map(b => b.text).join(" ").trim().slice(0, 1200);
+    setLog(id, { kiTake: txt }); render(); toast("KI-Einschätzung gespeichert.", { icon: "check" });
+  } catch (e) { toast("KI nicht erreichbar: " + String(e.message || e).slice(0, 120)); }
+}
 /* ---------- 4.4 Sportarten als Ringe (Wochen-Soll), Details im Blatt ---------- */
 const RING_LAB = { Lauf: "Laufen", Rad: "Rad", Schwimmen: "Schwimmen" }, RING_GO = { Lauf: "m", Rad: "bike", Schwimmen: "swim" };
 function sAmt(k, z) {
@@ -625,7 +745,8 @@ function sessView(id, D) {
   if (s.movedFrom) x += `<div class="sx-info">${ui("move")}<span>Verschoben von ${esc(U.wdD(s.movedFrom))}.</span>${s.adj && !s.orig ? `<button class="lnkbtn" data-act="undoadj" data-v="${esc(s.adj)}">Zurücknehmen</button>` : ""}</div>`;
   if (s.dropped && s.adj && !s.orig) x += `<div class="sx-info">${ui("trash")}<span>Gestrichen.</span><button class="lnkbtn" data-act="undoadj" data-v="${esc(s.adj)}">Zurücknehmen</button></div>`;
   const nach = nachOf(c, s); if (nach) x += `<div class="banner info">${ui("move")}<div class="tx">Nachgeholt am ${esc(U.wdD(nach.date))}${nach.time ? " · " + esc(nach.time) : ""}. Ergebnis wird dort eingetragen.</div><button class="btn sm" data-act="sess" data-id="${esc(nach.id)}">Öffnen</button></div>`;
-  if (doneish) x += sxResult(s, a, l, st);
+  if (doneish) x += sxResult(s, a, l, st) + takeCard(s, c);
+  else if (!s.dropped && st !== "✗" && st !== "krank") x += flowBlock(s, P);
   else if (st === "✗") x += `<section class="sx-res miss" aria-label="Ergebnis"><div class="sx-res-h">${sdot(S.c, "miss")}<div class="tx"><b>Verpasst</b><span>${esc({ zeit: "Keine Zeit", muede: "Müde oder Schmerz", krank: "Krank", reise: "Reise" }[l.why] || "Grund offen")}</span></div><button class="btn sm" data-act="mode" data-v="miss">${ui("pen")}Ändern</button></div><div class="sx-res-f"><button class="lnkbtn mute" data-act="clearst" data-id="${esc(s.id)}">${ui("undo")}Eintrag löschen</button></div></section>`;
   else if (st === "krank") x += `<div class="sx-info">${ui("sick")}<span>Krank gemeldet. Diese Einheit fällt weg und zählt nicht als verpasst.</span></div>`;
   // Aktionen: ein großer Hauptknopf, daneben Eintragen, dezent Verpasst und Verschieben
@@ -1182,6 +1303,7 @@ function vProg(c) {
   const vo2 = TR.vo2, vd = TR.vdot, tg = E.vdotTargets(B), lastVo2 = vo2.slice(-1)[0], lastVd = vd.slice(-1)[0];
   const tsbTxt = !today ? "" : today.tsb > 5 ? ["frisch", "ok"] : today.tsb > -10 ? ["ausgewogen", "ok"] : today.tsb > -25 ? ["im Aufbau", "warn"] : ["sehr müde", "bad"];
   let x = `<header class="lt"><div><div class="eyebrow">Prognose, Form und Aktivitäten</div><h1>Fortschritt</h1></div><div class="acts">${GAR_BTN(1)}<button class="iconbtn" data-act="imp" aria-label="Aktivitäten importieren">${ui("down")}</button><button class="iconbtn" data-act="vo2" aria-label="VO2max eintragen">${ui("plus")}</button></div></header>`;
+  x += raceCard(c) + weekReviewCard(c, c.cw - 1, true);
   x += `<div class="kpis" style="margin-top:0">
     <button class="kpi" data-act="info" data-v="form"><span class="info">${ui("info")}</span><div class="kl">Form</div><div class="kv">${today ? (today.tsb > 0 ? "+" : "") + Math.round(today.tsb) : "–"}</div><div class="ks ${tsbTxt[1] || ""}">${tsbTxt[0] || ""}</div></button>
     <button class="kpi" data-act="info" data-v="form"><span class="info">${ui("info")}</span><div class="kl">Fitness</div><div class="kv">${today ? Math.round(today.ctl) : "–"}</div><div class="ks">Ermüdung ${today ? Math.round(today.atl) : "–"}</div></button>
@@ -1891,6 +2013,10 @@ document.addEventListener("click", async e => {
     case "aicopy": { const S = SHEETS[SHEETS.length - 1], txt = E.AI_PROMPT + "\n\n" + JSON.stringify(S.data.pk, null, 1);
       S.data.copied = true; try { await navigator.clipboard.writeText(txt); toast("Kopiert. Jetzt in Claude einfügen.", { icon: "check" }); } catch (e) { await shareFile("Anfrage-Claude.txt", "text/plain", txt); } rerenderSheet(S); break; }
     case "aicheck": { const S = SHEETS[SHEETS.length - 1], raw = (S.data.f && S.data.f.airesp) || ($(".sheet [data-in=airesp]") || {}).value || ""; S.data.res = E.aiValidate(B, ST, today(), raw); rerenderSheet(S); break; }
+    case "kitake": kiTake(id); break;
+    case "chatgo": { const q = ($("#chatq") || {}).value || ""; if (q.trim()) chatAsk(q.trim()); break; }
+    case "chatok": chatApply(); break;
+    case "chatno": CHAT.r = null; CHAT.q = ""; CHAT.it = null; render(); break;
     case "aiask": { const S = SHEETS[SHEETS.length - 1]; if (S && PREF.aikey && !S.data.busy) aiAsk(S); break; }
     case "aireset": { const S = SHEETS[SHEETS.length - 1]; S.data.res = null; rerenderSheet(S); break; }
     case "aiaccept": { const S = SHEETS[SHEETS.length - 1], r = S.data.res; if (!r || !r.ok) break; const aid = applyAdj(r.p); closeSheet(S, true); render(); toast("KI-Vorschlag übernommen", { icon: "check", undo: () => setAdjUndone(aid, true) }); break; }
@@ -1977,7 +2103,7 @@ document.addEventListener("click", async e => {
     case "upd": navigator.serviceWorker.getRegistration().then(r => { if (r && r.waiting) r.waiting.postMessage("skip"); setTimeout(() => location.reload(), 300); }); break;
   }
 });
-document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("[role=button]")) { e.preventDefault(); e.target.click(); } });
+document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("[role=button]")) { e.preventDefault(); e.target.click(); } if (e.key === "Enter" && e.target.id === "chatq") { e.preventDefault(); const q = e.target.value.trim(); if (q) chatAsk(q); } });
 document.addEventListener("focusin", e => { if (e.target.matches("input,textarea,select") && !e.target.closest(".sheet") && !e.target.closest("#insp")) typing = true; });
 document.addEventListener("focusout", () => setTimeout(() => { typing = false; if (dirty) doRender(); }, 80));
 let noteT = null;

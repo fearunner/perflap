@@ -1455,3 +1455,75 @@ a.btn{text-decoration:none}
 .lastt,.goalc{margin-top:12px}
 .chat-a .btn.pri{background:var(--crimson,#FD6E88);color:var(--navy,#072D59)}
 .sheet .gp,.insp .gp{white-space:normal;overflow-wrap:anywhere;word-break:normal}
+
+/* ================= 5.2 Zielpfad, Checks, kompakte Zielkarte ================= */
+.pathc,.chk{background:var(--surface);border-radius:20px;padding:14px;margin:0 0 12px}
+.pathc-h,.chk-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pathc-h h3,.chk-h h3{font:700 1.125rem var(--txt);margin-top:2px}.pathc .gk{font-size:.75rem;font-weight:700;color:var(--mute)}
+.chk-h span{font-size:.8125rem;color:var(--mute);font-weight:600}
+.chip-st{font-size:.75rem;font-weight:700;padding:4px 10px;border-radius:12px;white-space:nowrap}.chip-st.ok{background:var(--ok-t);color:var(--ok)}.chip-st.warn{background:var(--warn-t);color:var(--warn)}
+.gpath{width:100%;height:auto;display:block;margin:8px 0 4px}
+.gpath .gl{stroke:var(--sep);stroke-width:1}.gpath .gy,.gpath .gx{font:600 9px var(--num);fill:var(--mute);text-anchor:end}.gpath .gx{text-anchor:start}
+.gpath .gs{stroke:var(--navy);stroke-width:2;stroke-dasharray:5 4;opacity:.55}
+.gpath .ga{fill:none;stroke:var(--crimson);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.gpath .gt{stroke:var(--navy);stroke-width:1;opacity:.25}
+.gpath .gnow{fill:var(--crimson);stroke:var(--surface);stroke-width:2}.gpath .gsoll{fill:var(--surface);stroke:var(--navy);stroke-width:2}.gpath .gz{fill:var(--navy)}.gpath .gpt{fill:var(--crimson)}
+.pathc-k{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0}.pathc-k div{background:var(--fill);border-radius:12px;padding:8px 10px}.pathc-k span{display:block;font-size:.6875rem;font-weight:600;color:var(--mute)}.pathc-k b{font:800 1.125rem var(--num)}.pathc-k .z{background:var(--navy);color:#EAF6FD}.pathc-k .z span{color:rgba(234,246,253,.75)}
+.pathc-t{font-size:.875rem;line-height:1.45;color:var(--ink2);margin:8px 2px}
+.pathc-f{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;border-top:var(--hair,.5px) solid var(--sep2);padding-top:10px;font-size:.8125rem;color:var(--mute)}.pathc-f b{font:800 1.125rem var(--num);color:var(--ink)}.pathc-f .neg{color:var(--warn);font-weight:700}.pathc-f .pos{color:var(--ok);font-weight:700}.pathc-fr{margin-left:auto}
+.chk-r{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:var(--hair,.5px) solid var(--sep2)}.chk-r:first-of-type{border-top:0}
+.chk-r>i{width:10px;height:10px;border-radius:50%;flex:none;background:var(--ok)}.chk-r.warn>i{background:var(--warn)}.chk-r.bad>i{background:var(--bad)}.chk-r.info>i{background:var(--lane)}
+.chk-r .tx{flex:1;min-width:0;display:grid;gap:2px}.chk-r b{font-size:.9375rem}.chk-r span{font-size:.8125rem;color:var(--mute);line-height:1.4}.chk-r.ok b{font-weight:600;color:var(--ink2)}
+.chk-r .btn.sm{flex:none;min-height:34px;padding:0 12px;font-size:.8125rem}
+/* Zielkarte kompakt */
+.goalc .gline{display:flex;align-items:center;gap:10px;margin:6px 0 4px}.goalc .gline b{font:800 1.25rem var(--num);color:var(--ink)}.goalc .gline .gz{color:var(--navy)}
+.gtrack{flex:1;position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--fill2),color-mix(in srgb,var(--navy) 35%,var(--fill2)))}
+.gtrack i{position:absolute;top:50%;transform:translate(-50%,-50%)}.gtrack .now{width:14px;height:14px;border-radius:50%;background:var(--crimson);box-shadow:0 0 0 3px var(--surface)}.gtrack .soll{width:10px;height:10px;border-radius:50%;background:var(--surface);box-shadow:inset 0 0 0 2px var(--navy)}.gtrack .goal{width:10px;height:10px;background:var(--navy);transform:translate(-50%,-50%) rotate(45deg)}
+.gchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.gc{font-size:.75rem;font-weight:700;padding:3px 9px;border-radius:10px;background:var(--fill)}.gc.ok{background:var(--ok-t);color:var(--ok)}.gc.knapp,.gc.warn{background:var(--warn-t);color:var(--warn)}.gc.kritisch{background:var(--bad-t);color:var(--bad)}
+.ov-grid.one{grid-template-columns:1fr}
+.ov-tip.solo{margin:0 0 12px;width:100%}
+
+/* ================= 6.0 Spaß und Diagramme ================= */
+.streak{display:inline-flex;align-items:center;gap:4px;height:40px;padding:0 12px 0 9px;border-radius:20px;background:var(--surface);color:var(--mute);box-shadow:0 1px 2px rgba(7,45,89,.1);font-size:.75rem;font-weight:700}
+.streak .ico{width:18px;height:18px}.streak b{font:800 1.0625rem var(--num);color:var(--ink)}
+.streak.on{color:var(--accent-ink,#C0294A)}.streak.on .ico{color:var(--crimson);fill:color-mix(in srgb,var(--crimson) 30%,transparent)}
+.streak.late{background:var(--crimson);color:var(--navy);animation:pulse 2s ease-in-out infinite}.streak.late b{color:var(--navy)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(253,110,136,.5)}50%{box-shadow:0 0 0 8px rgba(253,110,136,0)}}
+@media (prefers-reduced-motion:reduce){.streak.late{animation:none}}
+.confetti{position:fixed;left:0;right:0;bottom:22%;height:0;z-index:200;pointer-events:none}
+.confetti i{position:absolute;bottom:0;width:8px;height:12px;border-radius:2px;opacity:0;animation:conf var(--d) cubic-bezier(.2,.8,.3,1) forwards}
+.confetti.big i{width:9px;height:14px}
+@keyframes conf{0%{opacity:1;transform:translate(0,0) rotate(0)}70%{opacity:1}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r))}}
+/* Abzeichen */
+.bdg{background:var(--surface);border-radius:20px;padding:14px;margin:0 0 12px}
+.bdg .gk{font-size:.75rem;font-weight:700;color:var(--mute)}.bdg h3{font:700 1.125rem var(--txt);margin-top:2px}
+.bdg-s{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}.bdg-s div{background:var(--navy);color:#EAF6FD;border-radius:12px;padding:8px 10px}.bdg-s b{font:800 1.375rem var(--num);display:block;color:#fff}.bdg-s span{font-size:.6875rem;color:rgba(234,246,253,.75)}
+.bdg-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.bdgx{position:relative;overflow:hidden;background:var(--fill);border-radius:14px;padding:10px 8px 12px;display:grid;justify-items:center;text-align:center;gap:2px;color:var(--mute)}
+.bdgx-ic{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--fill2);color:var(--faint)}.bdgx-ic .ico{width:20px;height:20px}
+.bdgx b{font-size:.75rem;line-height:1.2;color:var(--ink2)}.bdgx small{font-size:.6875rem}
+.bdgx i{position:absolute;left:0;bottom:0;height:3px;background:var(--crimson);border-radius:0 2px 2px 0}
+.bdgx.on{background:color-mix(in srgb,var(--crimson) 12%,var(--surface))}.bdgx.on .bdgx-ic{background:var(--crimson);color:var(--navy)}.bdgx.on b{color:var(--ink)}
+/* Diagramm */
+.pch{background:var(--surface);border-radius:20px;padding:14px;margin:0 0 12px}
+.pch-h{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.pch-h h3{font:700 1.125rem var(--txt)}
+.seg.sm button{min-height:30px;padding:0 10px;font-size:.75rem}
+.pchart{width:100%;height:auto;display:block;margin:8px 0 4px;overflow:visible}
+.pchart .cg{stroke:var(--sep);stroke-width:1}.pchart .cy{font:600 9px var(--num);fill:var(--mute);text-anchor:end}.pchart .cx{font:600 9px var(--num);fill:var(--mute);text-anchor:middle}
+.pchart .cband{fill:color-mix(in srgb,var(--ok) 10%,transparent)}
+.pchart .cplan{fill:var(--fill2)}.pchart .cdone{fill:var(--navy)}.pchart .chit{fill:transparent}
+.pchart .cbar{cursor:pointer}.pchart .cbar:hover .chit,.pchart .cbar:focus .chit{fill:color-mix(in srgb,var(--navy) 6%,transparent)}
+.pchart .cbar.cur .cx{fill:var(--crimson);font-weight:800}
+.pchart .cpl{fill:none;stroke:var(--navy);stroke-width:1.6;stroke-dasharray:4 4;opacity:.5}.pchart .cln{fill:none;stroke:var(--crimson);stroke-width:2.5;stroke-linejoin:round}.pchart .cdot{fill:var(--crimson);stroke:var(--surface);stroke-width:2}
+.pchart .cempty{font:600 11px var(--txt);fill:var(--mute)}
+.pch-lg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.75rem;color:var(--mute)}.pch-lg span{display:inline-flex;align-items:center;gap:4px}.pch-lg i{width:10px;height:10px;border-radius:3px;display:inline-block}.pch-lg i.pl{background:var(--fill2)}.pch-lg i.dash{background:none;border-top:2px dashed var(--navy);height:0;width:14px;border-radius:0}
+.pch-s{font-size:.8125rem;color:var(--ink2);margin:8px 2px 0;line-height:1.4}
+.chk-ok{display:flex;gap:6px;align-items:flex-start;font-size:.8125rem;color:var(--ok);margin:6px 0 2px;line-height:1.4}.chk-ok .ico{width:16px;height:16px;flex:none;margin-top:1px}
+/* 6.0 Fix: Kopfzeile darf nie breiter als der Bildschirm werden (sonst rutscht die Tab-Leiste weg) */
+html,body{overflow-x:clip;max-width:100%}
+.lt{min-width:0}.lt>div:first-child{min-width:0}.lt .acts{flex-shrink:0;gap:6px}
+@media (max-width:480px){.streak{padding:0 9px 0 7px;height:36px}.streak span,.streak.late span{display:none}.lt h1{font-size:1.875rem}}
+@media (max-width:360px){.lt h1{font-size:1.5rem}.streak{height:32px;padding:0 6px}.streak .ico{width:15px;height:15px}.streak b{font-size:.9375rem}}
+.slotrow{flex-wrap:wrap}.slotrow .tx{flex:1 1 180px;min-width:0}.slotrow .seg{flex:none}
+@media (max-width:480px){.slotrow .seg{flex:1 1 100%;margin-left:52px}}
+.gpath,.pchart{max-width:640px;margin-left:auto;margin-right:auto}

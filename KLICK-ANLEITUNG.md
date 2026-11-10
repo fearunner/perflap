@@ -1,4 +1,57 @@
-# Gehhilfe 5.1: Klick-Anleitung
+# Gehhilfe 6.0: Klick-Anleitung
+
+## Neu in 6.0
+
+- **8 bis 10 Stunden nach Plan:** Die App kürzt nichts mehr automatisch, weil du zuletzt weniger trainiert hast. Normale Wochen kommen auf mindestens 8 Stunden: Lockere Läufe und Schwimmen werden etwas länger, an freien Montagen kommt ein lockeres Schwimmen dazu. Entlastungs-, Reise-, Taper- und Rennwochen bleiben bewusst leichter. Keine Woche geht über 10 Stunden. Steigt die Last stark, siehst du unter Checks den Hinweis „Großer Sprung“, und Morgen-Check sowie Schmerz-Eintrag bremsen sofort.
+- **Morgens trainieren:**
+  - Werktags beginnen Laufen und Kraft ab 6:00, Schwimmen liegt um 7:00. Fertig bist du gegen 8:00.
+  - Was morgens nicht passt, rutscht auf 18:00.
+  - Am Wochenende geht es ab 8:00 los.
+
+  Umstellen kannst du das unter Profil, **Trainingszeit**.
+- **Abhaken macht Spaß:**
+  - Beim Erledigen gibt es Konfetti und eine kurze Vibration.
+  - Die Meldung zeigt deine Serie, also wie viele Trainingstage du am Stück geschafft hast. Ruhetage unterbrechen sie nicht, Verpasstes schon.
+  - Wochen, in denen alle Schlüsseleinheiten erledigt sind, und neue Abzeichen werden extra gefeiert.
+- **Serie oben rechts:** Die Flamme zeigt die Tage am Stück. Ist abends noch etwas offen, wird sie rot und pulsiert.
+- **Abzeichen (Fortschritt):** 10 Abzeichen von „Losgelegt“ bis „30er“, jedes mit Fortschrittsbalken.
+- **Training im Blick (Fortschritt):** ein Diagramm mit vier Ansichten, Stunden, Zonen, Long Run und Einheiten. Tippst du auf eine Woche, öffnet sie sich mit allen Einheiten und der Zonenverteilung.
+- **Fehler behoben:**
+  - Die Kopfzeile war auf dem iPhone zu breit und hat die Tab-Leiste aus dem Bild geschoben.
+  - Die Karte „Als Nächstes“ war grau und mittig, weil zwei Bausteine gleich hießen.
+  - Nach dem Abhaken war die Ergebniskarte nicht mehr erreichbar.
+  - Die Profil-Zeile ist auf schmalen Geräten nicht mehr überlappt.
+
+## Neu in 5.3 (Plan v9)
+
+- **Aufbau ab deinem echten Stand:** Die App vergleicht jede der nächsten drei Wochen mit dem, was du in den letzten 4 Wochen tatsächlich trainiert hast. Krankheitstage zählen dabei nicht mit, Padel und Golf halb. Eine Woche darf höchstens 30 % über diesem Stand liegen, mindestens 70 % des Plans bleiben immer stehen. Zuerst fällt Optionales weg, dann werden lockere Einheiten und Kraft kürzer. Schlüsseleinheiten, Tests und Long Runs bleiben. Trainierst du mehr, wächst die Grenze automatisch mit.
+- **Aufholen nur mit Luft:** Der Aufholplan („Ziel halten“) legt nur noch drauf, wenn die Woche unter dieser Grenze liegt. Eine Schwelle baut er nicht ein, wenn du in den letzten 3 Tagen wegen Müdigkeit ausgefallen bist.
+- **Rad ab März:** Montags nach dem Long Run gibt es eine lockere Ausfahrt oder Rolle von 30 bis 60 Minuten, an sechs Terminen vom 01.03. bis 05.04. Ab Mitte April folgt der Triathlon-Aufbau wie geplant.
+- **Leistungsdiagnostik:** Unter Fortschritt, Checks, **Sportmedizinischer Test**, trägst du LT1 und LT2 (Puls und Pace), die maximale HF und die VO2max ein. LT1 wird dein Puls-Deckel für lockere Einheiten, LT2 deine Schwelle. Alle Zonen, Zielwerte und Einschätzungen rechnen danach neu.
+
+## Neu in 5.2
+
+- **Ziel auf der Übersicht:** Die Karte zeigt eine Linie von heute bis zum Ziel: Prognose heute (roter Punkt), wo du laut Plan heute stehen solltest (Kreis) und das Ziel (Raute). Darunter stehen Plantreue und die Zahl der offenen Checks. Ein Tipp öffnet Fortschritt.
+- **Dein Weg nach Linz (Fortschritt, oben):** Die Kurve zeigt deine Marathon-Prognose seit Planstart gegen die Soll-Linie zu 3:09. Jeder Leistungstest wird ein Messpunkt. Dazu steht, was der nächste Test zeigen muss, zum Beispiel „10-km-Test am 12.12. in 43:00 oder schneller“. Die Fitness (CTL) siehst du heute im Vergleich zum Plan.
+- **Checks:** Damit das Tracking realistisch bleibt, prüft die App:
+  - offene Einträge,
+  - ob Garmin aktuell ist,
+  - ob die Schwelle getestet ist,
+  - ob mehrere lockere Läufe über dem Puls-Deckel lagen,
+  - ob Puls-Daten fehlen,
+  - ob die Fitness zu steil steigt,
+  - ob es einen echten Leistungstest gibt,
+  - ob du den Morgen-Check machst.
+
+  Jeder offene Check hat einen Knopf, der ihn behebt.
+- **Long Runs ziehen wieder an:** Bisher blieb ein einmal gekürzter Long Run gekürzt. Jetzt rechnet die App immer vom Originalplan aus und hebt ihn wieder an, sobald du länger gelaufen bist.
+- **Garmin einen Tag daneben:** Läufst du einen Tag vor oder nach einer offenen Einheit, ordnet die App die Aktivität dieser Einheit zu, statt sie als freies Training zu zählen.
+- **Übersicht schlanker:** „Heute und morgen“ und „Nächste Termine“ sind weg, das zeigen jetzt Wochenkarte und Zielkarte. Der Ernährungstipp erscheint nur noch an harten und langen Tagen.
+- **Runden aus Garmin (Schritt 2):** Die App holt die Runden jeder Einheit und wertet sie aus:
+  - bei Intervallen die Pace jeder Wiederholung („4:40 · 4:40 · 4:41“), ob du nachlässt und ob der Puls in den Trabpausen steigt,
+  - bei lockeren und langen Läufen die Puls-Drift. Unter 5 % gilt die Dauer als aerob gefestigt.
+
+  **Dafür einmal die Supabase-Funktion aktualisieren:** Supabase, links **Edge Functions**, Funktion `garmin` öffnen, den Code durch den Inhalt von `App-Entwicklung/supabase/garmin/index.ts` ersetzen, **Deploy**. Ohne dieses Update läuft alles weiter wie bisher, nur ohne Runden.
 
 ## Neu in 5.1 (Aufbau nach Hiron)
 
